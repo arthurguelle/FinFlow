@@ -103,12 +103,13 @@ _send "database/" "${VPS_DIR}/database/"
 _send "infra/docker-compose.yml" "${VPS_DIR}/infra/docker-compose.yml"
 _send "infra/nginx.conf"         "${VPS_DIR}/infra/nginx.conf"
 
-# .env (se existir localmente)
-if [ -f ".env" ]; then
-  _send ".env" "${VPS_DIR}/.env"
-  warn ".env enviado para a VPS. Certifique-se de que tem permissão 600."
+# .env (lido de infra/.env)
+if [ -f "infra/.env" ]; then
+  _send "infra/.env" "${VPS_DIR}/infra/.env"
+  warn ".env enviado para a VPS (infra/.env → ${VPS_DIR}/infra/.env)"
 else
-  warn ".env não encontrado localmente. Crie-o na VPS manualmente a partir de .env.example!"
+  warn "infra/.env não encontrado! Crie-o a partir de .env.example antes do deploy."
+  fail "Abortando — configure o infra/.env primeiro."
 fi
 
 log "Arquivos enviados!"
@@ -118,9 +119,6 @@ log "Subindo containers na VPS..."
 ssh $SSH_OPTS ${VPS_USER}@${VPS_HOST} bash <<REMOTE
   set -e
   cd ${VPS_DIR}/infra
-  
-  # Garante que o .env está no lugar certo
-  [ -f "${VPS_DIR}/.env" ] && ln -sf "${VPS_DIR}/.env" "${VPS_DIR}/infra/.env"
   
   docker compose down --remove-orphans 2>/dev/null || true
   docker compose up -d --build
