@@ -1,0 +1,60 @@
+@use "@angular/material" as mat;
+
+// ── Custom FinFlow Theme (sóbrio e leve) ────────────────────────────────────
+html {
+  height: 100%;
+
+  @include mat.theme((
+    color: (
+      primary: mat.$azure-palette,
+      tertiary: mat.$blue-palette,
+    ),
+    typography: Roboto,
+    density: 0,
+  ));
+}
+
+// ── CSS Custom Properties ──────────────────────────────────────────────────
+:root {
+  --color-primary:        #4A6FA5;
+  --color-primary-dark:   #3a5a8c;
+  --color-accent:         #6C757D;
+  --color-background:     #F8F9FA;
+  --color-surface:        #FFFFFF;
+  --color-border:         #E0E4EA;
+  --color-text-primary:   #212529;
+  --color-text-secondary: #6C757D;
+}
+
+// ── Reset / Base ──────────────────────────────────────────────────────────
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  color-scheme: light;
+  background-color: var(--color-background);
+  color: var(--color-text-primary);
+  font: var(--mat-sys-body-medium);
+  font-family: Roboto, "Helvetica Neue", sans-serif;
+  margin: 0;
+  height: 100%;
+}
+
+// ── Angular Material overrides ────────────────────────────────────────────
+.mat-toolbar.mat-primary {
+  background: var(--color-primary) !important;
+}
+
+.mat-mdc-raised-button.mat-primary {
+  background: var(--color-primary) !important;
+}
+
+mat-card {
+  border-radius: 12px !important;
+  box-shadow: 0 2px 8px rgba(74, 111, 165, 0.08) !important;
+}
+
+.mat-mdc-table {
+  background: transparent;
+  th { font-weight: 600; color: var(--color-text-secondary); font-size: 0.8rem; text-transform: uppercase; }
+  td { border-bottom-color: var(--color-border); }
+}

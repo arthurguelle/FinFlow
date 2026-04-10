@@ -1,0 +1,78 @@
+# ============================================================
+# FinFlow .gitignore — .NET 10 + Angular + PostgreSQL + Docker
+# ============================================================
+
+# ── Environment / Secrets ──────────────────────────────────
+.env
+.env.dev
+.env.prod
+*.env
+!.env.example
+
+# ── .NET / C# ──────────────────────────────────────────────
+backend/bin/
+backend/obj/
+backend/*.user
+backend/.vs/
+backend/**/.vs/
+backend/**/bin/
+backend/**/obj/
+backend/**/*.user
+*.suo
+*.userosscache
+*.sln.docstates
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+bld/
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+publish/
+
+# NuGet
+*.nupkg
+*.nuget.props
+*.nuget.targets
+nuget.config
+packages/
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+# ── Node / Angular ─────────────────────────────────────────
+frontend/node_modules/
+frontend/dist/
+frontend/.angular/
+frontend/.cache/
+node_modules/
+dist/
+.angular/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ── Docker ─────────────────────────────────────────────────
+infra/postgres-data/
+
+# ── IDEs ───────────────────────────────────────────────────
+.vscode/settings.json
+.vscode/launch.json
+.vscode/*.code-workspace
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ── Logs / Temporários ─────────────────────────────────────
+*.log
+*.tmp
+*.temp
+crash-*.log
+
+# ── Uploads locais (PDFs em dev) ───────────────────────────
+backend/uploads/
