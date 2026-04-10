@@ -76,3 +76,18 @@ crash-*.log
 
 # ── Uploads locais (PDFs em dev) ───────────────────────────
 backend/uploads/
+
+# ── Chaves SSH e certificados ──────────────────────────────
+id_rsa
+id_rsa.pub
+id_ed25519
+id_ed25519.pub
+id_ecdsa
+id_ecdsa.pub
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.cer
+.ssh/
