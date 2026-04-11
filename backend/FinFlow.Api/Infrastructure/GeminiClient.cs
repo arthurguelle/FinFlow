@@ -42,20 +42,34 @@ public class GeminiClient(IHttpClientFactory httpFactory, IConfiguration config,
         };
 
         var client = httpFactory.CreateClient();
-        var url = $"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={_apiKey}";
-
-        var json = JsonSerializer.Serialize(requestBody);
-        var content = new StringContent(json, Encoding.UTF8, "application/json");
-
-        HttpResponseMessage response;
-        try
+        // Tenta gemini-2.0-flash primeiro (gratuito), fallback para 1.5-flash
+        var models = new[] { "gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-flash-latest" };
+        
+        HttpResponseMessage response = null!;
+        string? lastError = null;
+        foreach (var model in models)
         {
-            response = await client.PostAsync(url, content);
-            response.EnsureSuccessStatusCode();
+            var url = $"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={_apiKey}";
+            var json = JsonSerializer.Serialize(requestBody);
+            var reqContent = new StringContent(json, Encoding.UTF8, "application/json");
+            try
+            {
+                response = await client.PostAsync(url, reqContent);
+                if (response.IsSuccessStatusCode) break;
+                lastError = $"{model}: {(int)response.StatusCode}";
+                logger.LogWarning("Modelo {Model} retornou {Status}", model, response.StatusCode);
+            }
+            catch (Exception ex)
+            {
+                lastError = ex.Message;
+                logger.LogWarning(ex, "Erro ao tentar modelo {Model}", model);
+            }
         }
+
+        try { response.EnsureSuccessStatusCode(); }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Erro ao chamar Gemini API");
+            logger.LogError(ex, "Todos os modelos Gemini falharam. Último erro: {Error}", lastError);
             throw;
         }
 
