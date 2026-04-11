@@ -66,12 +66,13 @@ builder.Services.AddHttpClient();
 
 // ── AI Provider (selecionado via AI__Provider) ────────────────────────────────
 // Providers suportados: groq, openrouter, gemini (padrão)
-var aiProvider = (builder.Configuration["AI:Provider"] ?? "gemini").ToLowerInvariant();
 builder.Services.AddSingleton<IAiExtractor>(sp =>
 {
     var cfg = sp.GetRequiredService<IConfiguration>();
     var http = sp.GetRequiredService<IHttpClientFactory>();
     var log = sp.GetRequiredService<ILogger<OpenAiCompatibleExtractor>>();
+    var aiProvider = (cfg["AI:Provider"] ?? "gemini").ToLowerInvariant();
+    log.LogInformation("AI Provider selecionado: {Provider}", aiProvider);
     return aiProvider switch
     {
         "groq" => new OpenAiCompatibleExtractor(http,
