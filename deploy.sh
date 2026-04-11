@@ -6,7 +6,7 @@
 set -e  # para no primeiro erro
 
 # ── Configurações da VPS (edite aqui) ────────────────────────────────────────
-VPS_USER="root"
+VPS_USER="ubuntu"
 VPS_HOST="SEU_IP_OU_DOMINIO"
 VPS_PORT="22"
 VPS_DIR="/opt/finflow"          # pasta destino na VPS

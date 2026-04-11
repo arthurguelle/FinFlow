@@ -5,19 +5,11 @@ import { StorageService } from '../services/storage.service';
 export const authGuard: CanActivateFn = () => {
   const storage = inject(StorageService);
   const router = inject(Router);
-
-  if (storage.isLoggedIn()) return true;
-
-  router.navigate(['/login']);
-  return false;
+  return storage.isLoggedIn() ? true : router.createUrlTree(['/login']);
 };
 
 export const guestGuard: CanActivateFn = () => {
   const storage = inject(StorageService);
   const router = inject(Router);
-
-  if (!storage.isLoggedIn()) return true;
-
-  router.navigate(['/dashboard']);
-  return false;
+  return !storage.isLoggedIn() ? true : router.createUrlTree(['/dashboard']);
 };

@@ -15,7 +15,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./database:/docker-entrypoint-initdb.d:ro  # executa scripts na ordem
+      - ../database:/docker-entrypoint-initdb.d:ro
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
     command: >
@@ -35,7 +35,7 @@ services:
   # ── Backend .NET 10 ───────────────────────────────────────────────────────────
   backend:
     build:
-      context: ./backend
+      context: ../backend
       dockerfile: Dockerfile
     container_name: finflow_backend
     restart: unless-stopped
