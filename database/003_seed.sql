@@ -11,7 +11,7 @@ VALUES (
     '00000000-0000-0000-0000-000000000001',
     'Admin FinFlow',
     'admin@finflow.dev',
-    '$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQyCAgDJ1cGHSI.EKx1bCO/he'
+    '$2a$12$sq1SJuv6j3L1NiAiv5TiX.nNRyoQudrjrppTFSrJHk4cDELlJWofG'
 )
 ON CONFLICT (email) DO NOTHING;
 

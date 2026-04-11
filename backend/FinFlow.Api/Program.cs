@@ -12,19 +12,19 @@ var builder = WebApplication.CreateBuilder(args);
 // ── Configurações via Environment Variables ──────────────────────────────────
 var jwtSettings = new JwtSettings
 {
-    Secret = builder.Configuration["JWT__Secret"]
-        ?? throw new InvalidOperationException("JWT__Secret nao configurada"),
-    Issuer = builder.Configuration["JWT__Issuer"] ?? "finflow",
-    Audience = builder.Configuration["JWT__Audience"] ?? "finflow-users",
-    ExpiresInMinutes = int.TryParse(builder.Configuration["JWT__ExpiresInMinutes"], out var exp) ? exp : 60,
-    RefreshExpiresDays = int.TryParse(builder.Configuration["JWT__RefreshExpiresDays"], out var rexp) ? rexp : 7
+    Secret = builder.Configuration["JWT:Secret"]
+        ?? throw new InvalidOperationException("JWT:Secret nao configurada"),
+    Issuer = builder.Configuration["JWT:Issuer"] ?? "finflow",
+    Audience = builder.Configuration["JWT:Audience"] ?? "finflow-users",
+    ExpiresInMinutes = int.TryParse(builder.Configuration["JWT:ExpiresInMinutes"], out var exp) ? exp : 60,
+    RefreshExpiresDays = int.TryParse(builder.Configuration["JWT:RefreshExpiresDays"], out var rexp) ? rexp : 7
 };
 
 var connectionString = builder.Configuration.GetConnectionString("Default")
     ?? builder.Configuration["DATABASE_URL"]
     ?? throw new InvalidOperationException("String de conexao com o banco nao configurada");
 
-var allowedOrigins = (builder.Configuration["CORS__AllowedOrigins"] ?? "http://localhost:4200")
+var allowedOrigins = (builder.Configuration["CORS:AllowedOrigins"] ?? "http://localhost:4200")
     .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
 // ── Banco de Dados ────────────────────────────────────────────────────────────
@@ -34,6 +34,8 @@ builder.Services.AddDbContext<AppDbContext>(opt =>
 // ── JWT Auth ──────────────────────────────────────────────────────────────────
 builder.Services.AddSingleton(jwtSettings);
 builder.Services.AddSingleton<JwtHelper>();
+
+var jwtSecretBytes = Encoding.UTF8.GetBytes(jwtSettings.Secret);
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(opt =>
@@ -46,7 +48,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidateIssuerSigningKey = true,
             ValidIssuer = jwtSettings.Issuer,
             ValidAudience = jwtSettings.Audience,
-            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSettings.Secret))
+            IssuerSigningKey = new SymmetricSecurityKey(jwtSecretBytes)
         };
     });
 

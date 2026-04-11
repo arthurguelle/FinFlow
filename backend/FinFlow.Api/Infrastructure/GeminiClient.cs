@@ -8,7 +8,7 @@ namespace FinFlow.Api.Infrastructure;
 
 public class GeminiClient(IHttpClientFactory httpFactory, IConfiguration config, ILogger<GeminiClient> logger)
 {
-    private readonly string _apiKey = config["GEMINI__ApiKey"] ?? throw new InvalidOperationException("GEMINI__ApiKey não configurada");
+    private readonly string _apiKey = config["GEMINI:ApiKey"] ?? throw new InvalidOperationException("GEMINI:ApiKey não configurada");
 
     private const string PromptTemplate = """
         Analise este texto extraído de uma fatura ou boleto bancário e retorne SOMENTE um JSON válido com a seguinte estrutura:
