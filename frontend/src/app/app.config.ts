@@ -1,4 +1,4 @@
-import { ApplicationConfig, ErrorHandler, provideZoneChangeDetection } from "@angular/core";
+import { ApplicationConfig, ErrorHandler, LOCALE_ID, provideZoneChangeDetection } from "@angular/core";
 import { provideRouter } from "@angular/router";
 import { provideHttpClient, withInterceptors } from "@angular/common/http";
 import { provideAnimations } from "@angular/platform-browser/animations";
@@ -19,6 +19,7 @@ class DebugErrorHandler implements ErrorHandler {
 export const appConfig: ApplicationConfig = {
   providers: [
     { provide: ErrorHandler, useClass: DebugErrorHandler },
+    { provide: LOCALE_ID, useValue: 'pt-BR' },
     provideZoneChangeDetection({ eventCoalescing: true }),
     provideRouter(routes),
     provideHttpClient(withInterceptors([jwtInterceptor, errorInterceptor])),
