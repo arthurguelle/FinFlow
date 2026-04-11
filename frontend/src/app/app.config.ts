@@ -19,7 +19,7 @@ class DebugErrorHandler implements ErrorHandler {
 export const appConfig: ApplicationConfig = {
   providers: [
     { provide: ErrorHandler, useClass: DebugErrorHandler },
-    { provide: LOCALE_ID, useValue: 'pt-BR' },
+    { provide: LOCALE_ID, useValue: 'pt' },
     provideZoneChangeDetection({ eventCoalescing: true }),
     provideRouter(routes),
     provideHttpClient(withInterceptors([jwtInterceptor, errorInterceptor])),

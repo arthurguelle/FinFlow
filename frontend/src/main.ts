@@ -4,7 +4,7 @@ import { App } from './app/app';
 import { registerLocaleData } from '@angular/common';
 import localePt from '@angular/common/locales/pt';
 
-registerLocaleData(localePt, 'pt-BR');
+registerLocaleData(localePt); // registra como 'pt' — deve coincidir com uso nos pipes
 
 bootstrapApplication(App, appConfig)
   .catch((err) => {
