@@ -289,10 +289,14 @@ export class ExpensesComponent implements OnInit {
           this.extractedItems = r.data.items;
           this.snack.open(`${r.data.count} gastos extraídos!`, '', { duration: 3000 });
         } else {
-          this.snack.open(r.error ?? 'Erro ao processar PDF', 'Fechar', { duration: 5000 });
+          this.snack.open(r.error ?? 'Erro ao processar PDF', 'Fechar', { duration: 8000 });
         }
       },
-      error: () => this.snack.open('Erro ao processar PDF. Tente novamente.', 'Fechar', { duration: 5000 }),
+      error: (err) => {
+        const msg = err?.error?.error ?? err?.message ?? 'Erro ao processar PDF. Tente novamente.';
+        this.snack.open(msg, 'Fechar', { duration: 10000 });
+        this.extracting = false;
+      },
       complete: () => this.extracting = false
     });
   }

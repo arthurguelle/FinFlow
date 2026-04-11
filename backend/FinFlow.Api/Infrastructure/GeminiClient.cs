@@ -42,9 +42,9 @@ public class GeminiClient(IHttpClientFactory httpFactory, IConfiguration config,
         };
 
         var client = httpFactory.CreateClient();
-        // Tenta gemini-2.0-flash primeiro (gratuito), fallback para 1.5-flash
-        var models = new[] { "gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-flash-latest" };
-        
+        // Modelos em ordem de preferência (free tier)
+        var models = new[] { "gemini-2.0-flash-lite", "gemini-2.0-flash", "gemini-1.5-flash-8b", "gemini-1.5-flash" };
+
         HttpResponseMessage response = null!;
         string? lastError = null;
         foreach (var model in models)
@@ -55,7 +55,16 @@ public class GeminiClient(IHttpClientFactory httpFactory, IConfiguration config,
             try
             {
                 response = await client.PostAsync(url, reqContent);
-                if (response.IsSuccessStatusCode) break;
+                if (response.IsSuccessStatusCode) { logger.LogInformation("Gemini modelo usado: {Model}", model); break; }
+                if (response.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
+                {
+                    logger.LogWarning("Modelo {Model} rate limited, aguardando 3s...", model);
+                    await Task.Delay(3000);
+                    // tenta o mesmo modelo mais uma vez
+                    reqContent = new StringContent(json, Encoding.UTF8, "application/json");
+                    response = await client.PostAsync(url, reqContent);
+                    if (response.IsSuccessStatusCode) { logger.LogInformation("Gemini modelo usado (retry): {Model}", model); break; }
+                }
                 lastError = $"{model}: {(int)response.StatusCode}";
                 logger.LogWarning("Modelo {Model} retornou {Status}", model, response.StatusCode);
             }

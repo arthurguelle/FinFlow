@@ -99,6 +99,16 @@ public static class ExpenseEndpoints
             {
                 return Results.UnprocessableEntity(ApiResponse<PdfExtractResponse>.Fail(ex.Message));
             }
+            catch (HttpRequestException ex) when ((int?)ex.StatusCode == 429 || ex.Message.Contains("429"))
+            {
+                return Results.UnprocessableEntity(ApiResponse<PdfExtractResponse>.Fail(
+                    "Limite de requisições da API Gemini atingido. Aguarde alguns minutos e tente novamente."));
+            }
+            catch (HttpRequestException ex)
+            {
+                return Results.UnprocessableEntity(ApiResponse<PdfExtractResponse>.Fail(
+                    $"Erro ao comunicar com a IA: {ex.Message}. Verifique a chave GEMINI_API_KEY."));
+            }
         }).DisableAntiforgery();
     }
 
