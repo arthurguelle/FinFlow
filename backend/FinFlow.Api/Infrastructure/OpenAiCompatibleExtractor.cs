@@ -16,28 +16,32 @@ public class OpenAiCompatibleExtractor(
     string model) : IAiExtractor
 {
     private const string SystemPrompt = """
-        Você é um assistente especializado em extrair lançamentos financeiros de faturas e boletos.
-        Retorne SOMENTE um JSON válido, sem markdown, sem explicações:
-        {"items":[{"title":"descrição","amount":0.00,"date":"YYYY-MM-DD"}]}
-        Regras:
-        - Extraia apenas lançamentos de compras/gastos da tabela de despesas
-        - "amount" é número decimal positivo (sem símbolo de moeda)
-        - "date" no formato YYYY-MM-DD; se ausente, use a data de vencimento
-        - Ignore totais, subtotais, taxas de juros, cabeçalhos
+        Você é um assistente especializado em extrair TODOS os lançamentos financeiros de faturas de cartão e boletos.
+        Retorne SOMENTE um JSON válido, sem markdown, sem explicações, sem texto extra:
+        {"items":[{"title":"descrição do lançamento","amount":0.00,"date":"YYYY-MM-DD"}]}
+        Regras OBRIGATÓRIAS:
+        - Extraia TODOS os lançamentos/compras/transações listados, sem omitir nenhum
+        - "amount" deve ser número decimal positivo (sem símbolo de moeda, use ponto como separador decimal)
+        - "date" deve ser YYYY-MM-DD; se não houver data no item, use a data de vencimento da fatura
+        - NÃO inclua: totais, subtotais, pagamento mínimo, encargos, juros, IOF, anuidade, multa, limite de crédito, saldo
+        - Inclua parcelamentos (ex: "Netflix 2/12") como lançamentos normais
+        - Se o texto contiver várias páginas, processe todas
         """;
 
     public async Task<IEnumerable<ExtractedExpenseItem>> ExtractExpensesFromTextAsync(string pdfText)
     {
+        // Aumentado para 15000 chars para capturar mais itens de PDFs grandes
+        var truncated = pdfText[..Math.Min(pdfText.Length, 15000)];
         var requestBody = new
         {
             model,
             messages = new[]
             {
                 new { role = "system", content = SystemPrompt },
-                new { role = "user", content = $"Extraia os gastos deste texto:\n\n{pdfText[..Math.Min(pdfText.Length, 8000)]}" }
+                new { role = "user", content = $"Extraia TODOS os lançamentos deste extrato/fatura:\n\n{truncated}" }
             },
             temperature = 0.1,
-            max_tokens = 2048
+            max_tokens = 4096
         };
 
         var client = httpFactory.CreateClient();
