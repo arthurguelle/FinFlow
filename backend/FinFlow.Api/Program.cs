@@ -63,7 +63,30 @@ builder.Services.AddCors(opt =>
 
 // ── Servicos ──────────────────────────────────────────────────────────────────
 builder.Services.AddHttpClient();
-builder.Services.AddSingleton<GeminiClient>();
+
+// ── AI Provider (selecionado via AI__Provider) ────────────────────────────────
+// Providers suportados: groq, openrouter, gemini (padrão)
+var aiProvider = (builder.Configuration["AI:Provider"] ?? "gemini").ToLowerInvariant();
+builder.Services.AddSingleton<IAiExtractor>(sp =>
+{
+    var cfg = sp.GetRequiredService<IConfiguration>();
+    var http = sp.GetRequiredService<IHttpClientFactory>();
+    var log = sp.GetRequiredService<ILogger<OpenAiCompatibleExtractor>>();
+    return aiProvider switch
+    {
+        "groq" => new OpenAiCompatibleExtractor(http,
+            sp.GetRequiredService<ILogger<OpenAiCompatibleExtractor>>(),
+            "https://api.groq.com/openai/v1",
+            cfg["AI:GroqApiKey"] ?? throw new InvalidOperationException("AI:GroqApiKey não configurada"),
+            cfg["AI:Model"] ?? "llama-3.1-8b-instant"),
+        "openrouter" => new OpenAiCompatibleExtractor(http, log,
+            "https://openrouter.ai/api/v1",
+            cfg["AI:OpenRouterApiKey"] ?? throw new InvalidOperationException("AI:OpenRouterApiKey não configurada"),
+            cfg["AI:Model"] ?? "meta-llama/llama-3.1-8b-instruct:free"),
+        _ => (IAiExtractor)new GeminiClient(http, cfg, sp.GetRequiredService<ILogger<GeminiClient>>())
+    };
+});
+builder.Services.AddSingleton<GeminiClient>(); // mantido para compatibilidade
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IMovementService, MovementService>();
 builder.Services.AddScoped<IExpenseService, ExpenseService>();

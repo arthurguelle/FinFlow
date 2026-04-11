@@ -1,6 +1,6 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule, CurrencyPipe } from '@angular/common';
-import { ReactiveFormsModule, FormBuilder, Validators } from '@angular/forms';
+import { ReactiveFormsModule, FormBuilder, FormControl, Validators } from '@angular/forms';
 import { MatCardModule } from '@angular/material/card';
 import { MatTableModule } from '@angular/material/table';
 import { MatButtonModule } from '@angular/material/button';
@@ -39,6 +39,33 @@ import { Expense, Movement, ExtractedExpenseItem } from '../../core/models/model
           </button>
         </div>
       </div>
+
+      @if (pendingPasswordFile) {
+        <mat-card class="password-card">
+          <mat-card-header>
+            <mat-icon mat-card-avatar color="warn">lock</mat-icon>
+            <mat-card-title>PDF Protegido por Senha</mat-card-title>
+            <mat-card-subtitle>Informe a senha para processar o arquivo</mat-card-subtitle>
+          </mat-card-header>
+          <mat-card-content>
+            <mat-form-field appearance="outline" class="password-field">
+              <mat-label>Senha do PDF</mat-label>
+              <input matInput [type]="showPassword ? 'text' : 'password'" [formControl]="pdfPasswordCtrl"
+                     (keyup.enter)="retryWithPassword()" placeholder="Digite a senha do documento">
+              <button mat-icon-button matSuffix (click)="showPassword = !showPassword" type="button">
+                <mat-icon>{{ showPassword ? 'visibility_off' : 'visibility' }}</mat-icon>
+              </button>
+            </mat-form-field>
+          </mat-card-content>
+          <mat-card-actions>
+            <button mat-button (click)="cancelPasswordEntry()">Cancelar</button>
+            <button mat-raised-button color="primary" (click)="retryWithPassword()"
+                    [disabled]="extracting || !pdfPasswordCtrl.value">
+              <mat-icon>lock_open</mat-icon> Processar com senha
+            </button>
+          </mat-card-actions>
+        </mat-card>
+      }
 
       @if (extracting) {
         <mat-card class="extract-card">
@@ -180,7 +207,9 @@ import { Expense, Movement, ExtractedExpenseItem } from '../../core/models/model
     .extract-card mat-card-content { flex-direction: row; align-items: center; }
     .extracted-row { display: flex; align-items: center; gap: 1rem; padding: 0.5rem 0; border-bottom: 1px solid var(--color-border); }
     .extracted-row span:first-child { flex: 1; }
-    .form-card, .extract-card, .extract-results { margin-bottom: 1rem; }
+    .form-card, .extract-card, .extract-results, .password-card { margin-bottom: 1rem; }
+    .password-card { border-left: 4px solid #f44336; }
+    .password-field { width: 100%; max-width: 400px; margin-top: 0.5rem; }
     .expense-form { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
     .form-actions { grid-column: span 2; display: flex; justify-content: flex-end; gap: 0.5rem; }
     .empty-state { display: flex; flex-direction: column; align-items: center; padding: 3rem; color: var(--color-text-secondary); }
@@ -202,6 +231,9 @@ export class ExpensesComponent implements OnInit {
   saving = false;
   showForm = false;
   editing: Expense | null = null;
+  pendingPasswordFile: File | null = null;
+  pdfPasswordCtrl = new FormControl('');
+  showPassword = false;
 
   form: ReturnType<FormBuilder['group']>;
 
@@ -281,24 +313,47 @@ export class ExpensesComponent implements OnInit {
   onFileSelected(event: Event): void {
     const file = (event.target as HTMLInputElement).files?.[0];
     if (!file) return;
+    this.uploadPdf(file);
+  }
+
+  private uploadPdf(file: File, password?: string): void {
     this.extracting = true;
     this.extractedItems = [];
-    this.expenseService.extractFromPdf(file).subscribe({
+    this.expenseService.extractFromPdf(file, password).subscribe({
       next: r => {
         if (r.success && r.data) {
           this.extractedItems = r.data.items;
+          this.pendingPasswordFile = null;
+          this.pdfPasswordCtrl.reset();
           this.snack.open(`${r.data.count} gastos extraídos!`, '', { duration: 3000 });
         } else {
           this.snack.open(r.error ?? 'Erro ao processar PDF', 'Fechar', { duration: 8000 });
         }
       },
       error: (err) => {
-        const msg = err?.error?.error ?? err?.message ?? 'Erro ao processar PDF. Tente novamente.';
-        this.snack.open(msg, 'Fechar', { duration: 10000 });
+        const msg: string = err?.error?.error ?? err?.message ?? 'Erro ao processar PDF.';
+        const isPasswordError = msg.toLowerCase().includes('senha') || msg.toLowerCase().includes('protegido');
+        if (isPasswordError && !password) {
+          // Mostra campo de senha
+          this.pendingPasswordFile = file;
+          this.pdfPasswordCtrl.reset();
+        } else {
+          this.snack.open(msg, 'Fechar', { duration: 10000 });
+        }
         this.extracting = false;
       },
       complete: () => this.extracting = false
     });
+  }
+
+  retryWithPassword(): void {
+    if (!this.pendingPasswordFile || !this.pdfPasswordCtrl.value) return;
+    this.uploadPdf(this.pendingPasswordFile, this.pdfPasswordCtrl.value);
+  }
+
+  cancelPasswordEntry(): void {
+    this.pendingPasswordFile = null;
+    this.pdfPasswordCtrl.reset();
   }
 
   saveExtracted(item: ExtractedExpenseItem): void {

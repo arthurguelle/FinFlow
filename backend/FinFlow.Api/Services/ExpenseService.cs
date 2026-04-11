@@ -1,4 +1,7 @@
 using Microsoft.EntityFrameworkCore;
+using UglyToad.PdfPig;
+using UglyToad.PdfPig.Content;
+using UglyToad.PdfPig.Exceptions;
 using FinFlow.Api.Data;
 using FinFlow.Api.Models;
 using FinFlow.Api.Infrastructure;
@@ -13,10 +16,10 @@ public interface IExpenseService
     Task<ExpenseDto> UpdateAsync(Guid id, Guid userId, UpdateExpenseRequest request);
     Task DeleteAsync(Guid id, Guid userId);
     Task<SummaryDto> GetSummaryAsync(Guid userId, int? year, int? month);
-    Task<PdfExtractResponse> ExtractFromPdfAsync(Guid userId, IFormFile file);
+    Task<PdfExtractResponse> ExtractFromPdfAsync(Guid userId, IFormFile file, string? password = null);
 }
 
-public class ExpenseService(AppDbContext db, GeminiClient gemini, IWebHostEnvironment env) : IExpenseService
+public class ExpenseService(AppDbContext db, IAiExtractor ai, IWebHostEnvironment env) : IExpenseService
 {
     public async Task<IEnumerable<ExpenseDto>> GetAllAsync(Guid userId, int? year, int? month)
     {
@@ -125,7 +128,7 @@ public class ExpenseService(AppDbContext db, GeminiClient gemini, IWebHostEnviro
         return new SummaryDto(receitas, dividas, receitas - dividas, byMovement);
     }
 
-    public async Task<PdfExtractResponse> ExtractFromPdfAsync(Guid userId, IFormFile file)
+    public async Task<PdfExtractResponse> ExtractFromPdfAsync(Guid userId, IFormFile file, string? password = null)
     {
         if (file.ContentType != "application/pdf" && !file.FileName.EndsWith(".pdf"))
             throw new ArgumentException("Apenas arquivos PDF são aceitos.");
@@ -146,8 +149,8 @@ public class ExpenseService(AppDbContext db, GeminiClient gemini, IWebHostEnviro
             // Extrai texto do PDF usando iTextSharp ou similar
             // Por ora, lemos como bytes e enviamos o nome como contexto ao Gemini
             // Em produção, usar uma lib de extração de texto PDF
-            var pdfText = await ExtractTextFromPdfAsync(filePath);
-            var items = await gemini.ExtractExpensesFromTextAsync(pdfText);
+            var pdfText = await ExtractTextFromPdfAsync(filePath, password);
+            var items = await ai.ExtractExpensesFromTextAsync(pdfText);
             return new PdfExtractResponse(items, items.Count());
         }
         finally
@@ -156,22 +159,71 @@ public class ExpenseService(AppDbContext db, GeminiClient gemini, IWebHostEnviro
         }
     }
 
-    private static async Task<string> ExtractTextFromPdfAsync(string filePath)
+    private static Task<string> ExtractTextFromPdfAsync(string filePath, string? password = null)
     {
-        // Leitura básica de bytes — em produção use PdfPig ou iText7
-        // O Gemini consegue processar texto extraído de PDFs
-        var bytes = await File.ReadAllBytesAsync(filePath);
-        // Extrai strings legíveis do binário do PDF
-        var text = System.Text.Encoding.UTF8.GetString(bytes)
-            .Replace("\0", " ")
-            .Replace("\r", "\n");
+        PdfDocument? doc = null;
+        try
+        {
+            var options = new ParsingOptions();
+            if (!string.IsNullOrWhiteSpace(password))
+                options.Password = password;
 
-        // Filtra apenas linhas com conteúdo legível (heurística simples)
-        var lines = text.Split('\n')
-            .Where(l => l.Trim().Length > 2 && l.Any(char.IsLetterOrDigit))
-            .Take(300);
+            doc = PdfDocument.Open(filePath, options);
+        }
+        catch (PdfDocumentEncryptedException)
+        {
+            if (!string.IsNullOrWhiteSpace(password))
+                throw new InvalidOperationException("Senha incorreta. Verifique a senha do PDF e tente novamente.");
 
-        return string.Join("\n", lines);
+            throw new InvalidOperationException(
+                "Este PDF está protegido por senha. Clique em 'Importar PDF' e informe a senha do documento.");
+        }
+        catch (Exception ex) when (ex.Message.Contains("encrypt", StringComparison.OrdinalIgnoreCase)
+                                || ex.Message.Contains("password", StringComparison.OrdinalIgnoreCase)
+                                || ex.Message.Contains("secured", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                "Este PDF está protegido. Informe a senha ou remova a proteção antes de importar.");
+        }
+
+        try
+        {
+            var sb = new System.Text.StringBuilder();
+            foreach (var page in doc.GetPages())
+            {
+                // Extrai palavras com posição para reconstruir linhas
+                var words = page.GetWords().ToList();
+                if (words.Count == 0)
+                {
+                    // PDF com texto em imagem — avisa o usuário
+                    sb.AppendLine($"[Página {page.Number}: conteúdo em imagem, texto não extraível]");
+                    continue;
+                }
+
+                // Agrupa palavras por linha (Y próximo = mesma linha)
+                var lines = words
+                    .GroupBy(w => Math.Round(w.BoundingBox.Bottom, 1))
+                    .OrderByDescending(g => g.Key)
+                    .Select(g => string.Join(" ", g.OrderBy(w => w.BoundingBox.Left).Select(w => w.Text)));
+
+                foreach (var line in lines)
+                    sb.AppendLine(line);
+
+                sb.AppendLine();
+            }
+
+            var result = sb.ToString();
+            if (result.Trim().Length < 50)
+                throw new InvalidOperationException(
+                    "Não foi possível extrair texto deste PDF. O documento pode conter apenas imagens. " +
+                    "Tente um PDF de fatura digital (não escaneada).");
+
+            return Task.FromResult(result);
+        }
+        finally
+        {
+            doc.Dispose();
+        }
     }
 
     private static ExpenseDto ToDto(Expense e) =>

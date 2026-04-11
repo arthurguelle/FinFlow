@@ -86,6 +86,8 @@ id_ecdsa
 id_ecdsa.pub
 *.pem
 *.key
+*.pub
+infra/SSH/
 *.p12
 *.pfx
 *.crt

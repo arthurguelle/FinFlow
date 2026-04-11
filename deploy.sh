@@ -7,10 +7,13 @@ set -e  # para no primeiro erro
 
 # ── Configurações da VPS (edite aqui) ────────────────────────────────────────
 VPS_USER="ubuntu"
-VPS_HOST="SEU_IP_OU_DOMINIO"
+VPS_HOST="204.216.129.57"    # ← OBRIGATÓRIO: preencha o IP ou domínio da VPS
 VPS_PORT="22"
-VPS_DIR="/opt/finflow"          # pasta destino na VPS
-SSH_KEY="~/.ssh/id_rsa"         # chave SSH (deixe vazio para usar senha)
+VPS_DIR="/opt/finflow"
+SSH_KEY="infra/SSH/ssh-key-2026-04-11.key"  # chave SSH do projeto
+
+# ── Arquivo .env de produção ──────────────────────────────────────────────────
+ENV_FILE="infra/.env.prod"      # ← será enviado para a VPS como infra/.env
 
 # ── Cores para output ────────────────────────────────────────────────────────
 GREEN='\033[0;32m'
@@ -64,14 +67,16 @@ ssh $SSH_OPTS ${VPS_USER}@${VPS_HOST} bash <<'REMOTE'
   # Instala Docker se não estiver instalado
   if ! command -v docker &>/dev/null; then
     echo "[VPS] Instalando Docker..."
-    apt-get update -qq
-    apt-get install -y docker.io docker-compose-v2 curl
-    systemctl enable --now docker
+    sudo apt-get update -qq
+    sudo apt-get install -y docker.io docker-compose-v2 curl
+    sudo systemctl enable --now docker
+    sudo usermod -aG docker $USER
     echo "[VPS] Docker instalado!"
   else
     echo "[VPS] Docker já instalado: $(docker --version)"
   fi
-  mkdir -p /opt/finflow/{database,infra,frontend/dist/finflow/browser,backend/publish}
+  sudo mkdir -p /opt/finflow/{database,infra,frontend/dist/finflow/browser,backend/publish}
+  sudo chown -R $USER:$USER /opt/finflow
 REMOTE
 
 # ── 5. Enviar arquivos ────────────────────────────────────────────────────────
@@ -93,8 +98,9 @@ _send() {
 # Frontend (dist)
 _send "frontend/dist/finflow/browser/" "${VPS_DIR}/frontend/dist/finflow/browser/"
 
-# Backend (publish)
-_send "backend/publish/" "${VPS_DIR}/backend/publish/"
+# Backend (publish + Dockerfile.vps)
+_send "backend/publish/"        "${VPS_DIR}/backend/publish/"
+_send "backend/Dockerfile.vps"  "${VPS_DIR}/backend/Dockerfile.vps"
 
 # Scripts SQL
 _send "database/" "${VPS_DIR}/database/"
@@ -103,13 +109,15 @@ _send "database/" "${VPS_DIR}/database/"
 _send "infra/docker-compose.yml" "${VPS_DIR}/infra/docker-compose.yml"
 _send "infra/nginx.conf"         "${VPS_DIR}/infra/nginx.conf"
 
-# .env (lido de infra/.env)
-if [ -f "infra/.env" ]; then
-  _send "infra/.env" "${VPS_DIR}/infra/.env"
-  warn ".env enviado para a VPS (infra/.env → ${VPS_DIR}/infra/.env)"
+# .env de produção
+if [ -f "${ENV_FILE}" ]; then
+  if grep -q "PREENCHA_" "${ENV_FILE}" 2>/dev/null; then
+    fail "Preencha todos os campos em ${ENV_FILE} antes de fazer deploy!"
+  fi
+  _send "${ENV_FILE}" "${VPS_DIR}/infra/.env"
+  warn ".env enviado para a VPS (${ENV_FILE} → ${VPS_DIR}/infra/.env)"
 else
-  warn "infra/.env não encontrado! Crie-o a partir de .env.example antes do deploy."
-  fail "Abortando — configure o infra/.env primeiro."
+  fail "${ENV_FILE} não encontrado! Preencha infra/.env.prod antes do deploy."
 fi
 
 log "Arquivos enviados!"
@@ -119,13 +127,13 @@ log "Subindo containers na VPS..."
 ssh $SSH_OPTS ${VPS_USER}@${VPS_HOST} bash <<REMOTE
   set -e
   cd ${VPS_DIR}/infra
-  
-  docker compose down --remove-orphans 2>/dev/null || true
-  docker compose up -d --build
-  
+
+  sudo docker compose down --remove-orphans 2>/dev/null || true
+  sudo docker compose up -d --build
+
   echo ""
   echo "Status dos containers:"
-  docker compose ps
+  sudo docker compose ps
 REMOTE
 
 log "Deploy concluído! 🚀"

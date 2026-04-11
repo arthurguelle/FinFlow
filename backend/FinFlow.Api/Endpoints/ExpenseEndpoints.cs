@@ -82,13 +82,23 @@ public static class ExpenseEndpoints
             }
         });
 
-        // Upload de PDF → Gemini → retorna gastos extraídos
-        group.MapPost("/extract-pdf", async (IFormFile file, ClaimsPrincipal user, IExpenseService service) =>
+        // Upload de PDF → IA → retorna gastos extraídos
+        // Campo opcional "password" para PDFs protegidos
+        group.MapPost("/extract-pdf", async (HttpRequest req, ClaimsPrincipal user, IExpenseService service) =>
         {
             try
             {
+                if (!req.HasFormContentType)
+                    return Results.BadRequest(ApiResponse<PdfExtractResponse>.Fail("Envie o PDF como multipart/form-data."));
+
+                var form = await req.ReadFormAsync();
+                var file = form.Files.GetFile("file");
+                if (file is null)
+                    return Results.BadRequest(ApiResponse<PdfExtractResponse>.Fail("Campo 'file' obrigatório."));
+
+                var password = form["password"].FirstOrDefault();
                 var userId = GetUserId(user);
-                var result = await service.ExtractFromPdfAsync(userId, file);
+                var result = await service.ExtractFromPdfAsync(userId, file, password);
                 return Results.Ok(ApiResponse<PdfExtractResponse>.Ok(result));
             }
             catch (ArgumentException ex)
@@ -102,12 +112,12 @@ public static class ExpenseEndpoints
             catch (HttpRequestException ex) when ((int?)ex.StatusCode == 429 || ex.Message.Contains("429"))
             {
                 return Results.UnprocessableEntity(ApiResponse<PdfExtractResponse>.Fail(
-                    "Limite de requisições da API Gemini atingido. Aguarde alguns minutos e tente novamente."));
+                    "Limite de requisições da API de IA atingido. Aguarde alguns minutos e tente novamente."));
             }
             catch (HttpRequestException ex)
             {
                 return Results.UnprocessableEntity(ApiResponse<PdfExtractResponse>.Fail(
-                    $"Erro ao comunicar com a IA: {ex.Message}. Verifique a chave GEMINI_API_KEY."));
+                    $"Erro ao comunicar com a IA: {ex.Message}"));
             }
         }).DisableAntiforgery();
     }

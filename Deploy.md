@@ -1,68 +1,54 @@
 # FinFlow — Guia de Deploy na VPS
 
-## Pré-requisitos
+## ✅ Checklist pré-deploy
 
-| Local (sua máquina) | VPS |
-|---------------------|-----|
-| Git Bash ou WSL     | Ubuntu 20.04+ (ou Debian) |
-| Node.js + npm       | Acesso SSH com root |
-| .NET 10 SDK         | — (Docker instala tudo) |
-| Chave SSH configurada | — |
+### 1 — Preencha o IP da VPS em `deploy.sh`
+
+Abra `deploy.sh` e edite a linha:
+
+```bash
+VPS_HOST="SEU_IP_OU_DOMINIO"   # ← coloque o IP ou domínio real da VPS
+VPS_USER="root"                 # ← usuário SSH (root, ubuntu, etc.)
+```
+
+A chave SSH já está apontada para `infra/SSH/ssh-key-2026-04-10.key`.
 
 ---
 
-## Passo 1 — Configure o deploy.sh
+### 2 — Preencha `infra/.env.prod`
 
-Abra `deploy.sh` e edite as 3 primeiras variáveis:
-
-```bash
-VPS_USER="root"              # ou seu usuário da VPS
-VPS_HOST="123.456.789.0"     # IP ou domínio da VPS
-SSH_KEY="~/.ssh/id_rsa"      # caminho da sua chave SSH
-```
-
----
-
-## Passo 2 — Configure o .env
-
-Crie o arquivo `infra/.env` a partir do exemplo:
-
-```bash
-cp .env.example infra/.env
-```
-
-Edite os valores obrigatórios:
+Edite o arquivo `infra/.env.prod` com os valores reais:
 
 ```env
-POSTGRES_PASSWORD=uma_senha_forte_aqui
-JWT_SECRET=string_aleatoria_minimo_32_chars
-GEMINI_API_KEY=sua_chave_do_gemini
+POSTGRES_PASSWORD=uma_senha_forte_ex_Xk9#mP2
+JWT_SECRET=string_aleatoria_minimo_32_chars_ex_abc123...
+GEMINI_API_KEY=AIzaSy...          # https://aistudio.google.com/app/apikey
+CORS_ORIGINS=http://SEU_IP        # mesmo IP da VPS
 ```
 
-> Obtenha a chave Gemini gratuita em: https://aistudio.google.com/app/apikey
+> Para gerar JWT_SECRET: `openssl rand -base64 48`
 
 ---
 
-## Passo 3 — Execute o deploy
-
-No **Git Bash** ou **WSL**:
+### 3 — Rode o deploy (Git Bash ou WSL)
 
 ```bash
-cd /c/FinFlow    # ou o caminho do projeto
+cd /c/FinFlow
+chmod +x deploy.sh
 bash deploy.sh
 ```
 
-O script vai:
-1. Fazer build do Angular
-2. Publicar o .NET
+O script vai automaticamente:
+1. Build do Angular (produção)
+2. Publish do .NET 10
 3. Conectar na VPS via SSH
-4. Instalar Docker automaticamente (se necessário)
+4. Instalar Docker (se necessário)
 5. Enviar todos os arquivos
-6. Subir os containers com `docker compose up -d`
+6. Subir os containers (`docker compose up -d`)
 
 ---
 
-## Passo 4 — Verificar
+### 4 — Verificar
 
 Após o deploy, acesse:
 
@@ -78,25 +64,22 @@ Login inicial (seed do banco):
 ## Comandos úteis na VPS
 
 ```bash
-ssh root@SEU_IP
+ssh -i infra/SSH/ssh-key-2026-04-11.key root@SEU_IP
 
-# Ver status
+# Status dos containers
 cd /opt/finflow/infra && docker compose ps
 
-# Ver logs do backend
+# Logs do backend
 docker compose logs -f backend
 
-# Ver logs do banco
-docker compose logs postgres
-
-# Reiniciar serviço
+# Reiniciar backend
 docker compose restart backend
 
 # Parar tudo
 docker compose down
 
-# Atualizar (após novo deploy)
-docker compose down && docker compose up -d --build
+# Atualizar (após novo deploy local)
+bash deploy.sh
 ```
 
 ---
@@ -108,17 +91,12 @@ docker compose down && docker compose up -d --build
   infra/
     docker-compose.yml
     nginx.conf
-    .env
+    .env                 ← gerado a partir de infra/.env.prod
   backend/
-    publish/         ← .NET compilado
+    publish/             ← .NET compilado (AOT)
   frontend/
-    dist/            ← Angular buildado
+    dist/                ← Angular buildado
   database/
-    001_*.sql        ← executados na criação do postgres
+    001_*.sql            ← executados automaticamente na criação do postgres
 ```
 
----
-
-## Renovar deploy (futuras atualizações)
-
-Basta rodar `bash deploy.sh` novamente — ele atualiza tudo e reinicia os containers.

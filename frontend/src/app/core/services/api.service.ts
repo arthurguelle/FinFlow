@@ -36,9 +36,10 @@ export class ExpenseService {
     return this.http.delete<void>(`${this.url}/${id}`);
   }
 
-  extractFromPdf(file: File): Observable<ApiResponse<PdfExtractResponse>> {
+  extractFromPdf(file: File, password?: string): Observable<ApiResponse<PdfExtractResponse>> {
     const form = new FormData();
     form.append('file', file);
+    if (password) form.append('password', password);
     return this.http.post<ApiResponse<PdfExtractResponse>>(`${this.url}/extract-pdf`, form);
   }
 }
