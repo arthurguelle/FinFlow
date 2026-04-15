@@ -59,23 +59,31 @@ public class OpenAiCompatibleExtractor(
             try
             {
                 using var response = await client.PostAsync($"{baseUrl}/chat/completions", content);
+
+                if (response.StatusCode == HttpStatusCode.RequestEntityTooLarge ||
+                    (int)response.StatusCode == 413)
+                {
+                    if (i < PromptCharBudgets.Length - 1)
+                    {
+                        logger.LogWarning(
+                            "Provider retornou 413 para {Chars} chars. Reduzindo payload.",
+                            budget);
+                        continue;
+                    }
+
+                    logger.LogWarning("413 persistente após todos os budgets ({Chars} chars).", budget);
+                    throw new InvalidOperationException(
+                        "O conteúdo do PDF excedeu o limite aceito pelo provedor de IA. " +
+                        "Tente um PDF menor ou divida o documento em partes.");
+                }
+
                 response.EnsureSuccessStatusCode();
                 var responseJson = await response.Content.ReadAsStringAsync();
                 return ParseResponse(responseJson);
             }
-            catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.RequestEntityTooLarge)
+            catch (InvalidOperationException)
             {
-                if (i < PromptCharBudgets.Length - 1)
-                {
-                    logger.LogWarning(
-                        "Provider retornou 413 para {Chars} chars. Reduzindo payload e tentando novamente.",
-                        budget);
-                    continue;
-                }
-
-                // Último budget esgotado — re-throw preservando StatusCode e mensagem original
-                logger.LogWarning("Todos os tamanhos de payload esgotados ({Chars} chars mínimo).", budget);
-                throw;
+                throw; // propaga mensagem amigável sem logar stack trace
             }
             catch (Exception ex)
             {
@@ -84,7 +92,6 @@ public class OpenAiCompatibleExtractor(
             }
         }
 
-        // Nunca alcançado (o re-throw acima sai do loop), mas necessário para o compilador
         throw new InvalidOperationException("Falha inesperada no loop de retry da IA.");
     }
 
