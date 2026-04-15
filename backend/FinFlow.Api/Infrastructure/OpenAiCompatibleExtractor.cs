@@ -206,4 +206,58 @@ public class OpenAiCompatibleExtractor(
 
         return items;
     }
+
+    /// <summary>
+    /// Testa conectividade com o provider OpenAI-compatível sem consumir tokens.
+    /// Chama GET /models com header Authorization.
+    /// </summary>
+    public async Task<AiPingResult> PingAsync()
+    {
+        var url = $"{baseUrl.TrimEnd('/')}/models";
+        var client = httpFactory.CreateClient();
+        client.DefaultRequestHeaders.Authorization =
+            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", apiKey);
+
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        try
+        {
+            var response = await client.GetAsync(url);
+            sw.Stop();
+
+            var body = await response.Content.ReadAsStringAsync();
+
+            if (!response.IsSuccessStatusCode)
+            {
+                return new AiPingResult(
+                    false, baseUrl, model, (int)sw.ElapsedMilliseconds,
+                    null, $"HTTP {(int)response.StatusCode}: {body[..Math.Min(200, body.Length)]}");
+            }
+
+            // Tenta extrair nomes de modelos do JSON de resposta
+            string? detail = null;
+            try
+            {
+                using var doc = JsonDocument.Parse(body);
+                var models = doc.RootElement
+                    .GetProperty("data")
+                    .EnumerateArray()
+                    .Select(m => m.GetProperty("id").GetString())
+                    .Where(n => n != null)
+                    .Take(3)
+                    .ToList();
+                detail = $"Modelos disponíveis: {string.Join(", ", models)}";
+            }
+            catch { detail = "Conexão OK"; }
+
+            logger.LogInformation("[AI Ping] OpenAI-compat ({Url}) OK ({Ms}ms)", baseUrl, sw.ElapsedMilliseconds);
+
+            return new AiPingResult(true, baseUrl, model, (int)sw.ElapsedMilliseconds, detail, null);
+        }
+        catch (Exception ex)
+        {
+            sw.Stop();
+            logger.LogError(ex, "[AI Ping] OpenAI-compat ({Url}) falhou", baseUrl);
+            return new AiPingResult(false, baseUrl, model, (int)sw.ElapsedMilliseconds, null, ex.Message);
+        }
+    }
 }
