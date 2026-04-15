@@ -114,6 +114,11 @@ public static class ExpenseEndpoints
                 return Results.UnprocessableEntity(ApiResponse<PdfExtractResponse>.Fail(
                     "Limite de requisições da API de IA atingido. Aguarde alguns minutos e tente novamente."));
             }
+            catch (HttpRequestException ex) when ((int?)ex.StatusCode == 413 || ex.Message.Contains("413"))
+            {
+                return Results.UnprocessableEntity(ApiResponse<PdfExtractResponse>.Fail(
+                    "O conteúdo do PDF excedeu o limite aceito pelo provedor de IA. Tente um PDF menor ou divida o documento em partes."));
+            }
             catch (HttpRequestException ex)
             {
                 return Results.UnprocessableEntity(ApiResponse<PdfExtractResponse>.Fail(

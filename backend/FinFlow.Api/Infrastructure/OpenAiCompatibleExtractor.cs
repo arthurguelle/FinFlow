@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using System.Net;
 using FinFlow.Api.Models;
 
 namespace FinFlow.Api.Infrastructure;
@@ -15,6 +16,8 @@ public class OpenAiCompatibleExtractor(
     string apiKey,
     string model) : IAiExtractor
 {
+    private static readonly int[] PromptCharBudgets = [15000, 12000, 9000, 7000, 5000, 3500];
+
     private const string SystemPrompt = """
         Você é um assistente especializado em extrair TODOS os lançamentos financeiros de faturas de cartão e boletos.
         Retorne SOMENTE um JSON válido, sem markdown, sem explicações, sem texto extra:
@@ -30,41 +33,75 @@ public class OpenAiCompatibleExtractor(
 
     public async Task<IEnumerable<ExtractedExpenseItem>> ExtractExpensesFromTextAsync(string pdfText)
     {
-        // Aumentado para 15000 chars para capturar mais itens de PDFs grandes
-        var truncated = pdfText[..Math.Min(pdfText.Length, 15000)];
-        var requestBody = new
-        {
-            model,
-            messages = new[]
-            {
-                new { role = "system", content = SystemPrompt },
-                new { role = "user", content = $"Extraia TODOS os lançamentos deste extrato/fatura:\n\n{truncated}" }
-            },
-            temperature = 0.1,
-            max_tokens = 4096
-        };
-
         var client = httpFactory.CreateClient();
         client.DefaultRequestHeaders.Authorization =
             new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", apiKey);
 
-        var json = JsonSerializer.Serialize(requestBody);
-        var content = new StringContent(json, Encoding.UTF8, "application/json");
-
-        HttpResponseMessage response;
-        try
+        for (var i = 0; i < PromptCharBudgets.Length; i++)
         {
-            response = await client.PostAsync($"{baseUrl}/chat/completions", content);
-            response.EnsureSuccessStatusCode();
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Erro ao chamar {BaseUrl} com modelo {Model}", baseUrl, model);
-            throw;
+            var budget = PromptCharBudgets[i];
+            var truncated = pdfText[..Math.Min(pdfText.Length, budget)];
+            var requestBody = new
+            {
+                model,
+                messages = new[]
+                {
+                    new { role = "system", content = SystemPrompt },
+                    new { role = "user", content = $"Extraia TODOS os lançamentos deste extrato/fatura:\n\n{truncated}" }
+                },
+                temperature = 0.1,
+                max_tokens = 4096
+            };
+
+            var json = JsonSerializer.Serialize(requestBody);
+            using var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+            try
+            {
+                using var response = await client.PostAsync($"{baseUrl}/chat/completions", content);
+
+                if (response.StatusCode == HttpStatusCode.RequestEntityTooLarge)
+                {
+                    if (i < PromptCharBudgets.Length - 1)
+                    {
+                        logger.LogWarning(
+                            "Provider retornou 413 para {Chars} chars. Tentando novamente com payload menor.",
+                            budget);
+                        continue;
+                    }
+
+                    throw new HttpRequestException(
+                        "O payload enviado para a IA excede o limite aceito pelo provider.",
+                        null,
+                        HttpStatusCode.RequestEntityTooLarge);
+                }
+
+                response.EnsureSuccessStatusCode();
+                var responseJson = await response.Content.ReadAsStringAsync();
+                return ParseResponse(responseJson);
+            }
+            catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.RequestEntityTooLarge && i < PromptCharBudgets.Length - 1)
+            {
+                logger.LogWarning(
+                    "Falha 413 para {Chars} chars em {BaseUrl}. Reduzindo payload.",
+                    budget,
+                    baseUrl);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Erro ao chamar {BaseUrl} com modelo {Model}", baseUrl, model);
+                throw;
+            }
         }
 
-        var responseJson = await response.Content.ReadAsStringAsync();
+        throw new HttpRequestException(
+            "Não foi possível enviar o conteúdo do PDF para a IA dentro do limite de tamanho do provider.",
+            null,
+            HttpStatusCode.RequestEntityTooLarge);
+    }
 
+    private IEnumerable<ExtractedExpenseItem> ParseResponse(string responseJson)
+    {
         try
         {
             using var doc = JsonDocument.Parse(responseJson);
