@@ -16,41 +16,78 @@ public class OpenAiCompatibleExtractor(
     string apiKey,
     string model) : IAiExtractor
 {
-    private static readonly int[] PromptCharBudgets = [15000, 12000, 9000, 7000, 5000, 3500];
+    // Tamanhos de chunk para processar o PDF em partes quando necessário.
+    // Groq llama-3.1-8b free tier aceita ~4000 chars por chamada sem 413.
+    private const int ChunkSize = 3500;
+    private const int MaxTokensOutput = 2048;
 
     private const string SystemPrompt = """
-        Você é um assistente especializado em extrair TODOS os lançamentos financeiros de faturas de cartão e boletos.
-        Retorne SOMENTE um JSON válido, sem markdown, sem explicações, sem texto extra:
-        {"items":[{"title":"descrição do lançamento","amount":0.00,"date":"YYYY-MM-DD"}]}
-        Regras OBRIGATÓRIAS:
-        - Extraia TODOS os lançamentos/compras/transações listados, sem omitir nenhum
-        - "amount" deve ser número decimal positivo (sem símbolo de moeda, use ponto como separador decimal)
-        - "date" deve ser YYYY-MM-DD; se não houver data no item, use a data de vencimento da fatura
-        - NÃO inclua: totais, subtotais, pagamento mínimo, encargos, juros, IOF, anuidade, multa, limite de crédito, saldo
-        - Inclua parcelamentos (ex: "Netflix 2/12") como lançamentos normais
-        - Se o texto contiver várias páginas, processe todas
+        Você é um extrator de lançamentos financeiros de faturas de cartão de crédito brasileiras.
+        Retorne SOMENTE um JSON válido, sem markdown, sem comentários, sem texto adicional:
+        {"items":[{"title":"NOME DO ESTABELECIMENTO","amount":0.00,"date":"YYYY-MM-DD"}]}
+
+        REGRAS:
+        1. "title": use EXATAMENTE o nome do estabelecimento/lançamento como aparece no extrato (ex: "NETFLIX.COM", "UBER *TRIP", "SUPERMERCADO EXTRA 03/12")
+        2. "amount": valor decimal positivo, use ponto como separador (ex: 49.90)
+        3. "date": formato YYYY-MM-DD. Se a linha tiver DD/MM ou DD/MM/AA, converta. Se não houver data, use a data de vencimento da fatura.
+        4. NO texto de fatura, cada linha de lançamento tem formato típico: DATA ESTABELECIMENTO [PARCELA] VALOR
+        5. INCLUA todos os lançamentos: compras, parcelamentos, débitos
+        6. EXCLUA: total da fatura, pagamento mínimo, saldo anterior, limite, IOF, encargos, juros, multas
+        7. Se receber texto parcial, extraia apenas os lançamentos presentes no trecho recebido.
         """;
 
     public async Task<IEnumerable<ExtractedExpenseItem>> ExtractExpensesFromTextAsync(string pdfText)
     {
+        // Divide o texto em chunks para cobrir o PDF inteiro independente do tamanho.
+        var chunks = SplitIntoChunks(pdfText, ChunkSize);
+        logger.LogInformation("Processando PDF em {Count} chunk(s) de até {Size} chars", chunks.Count, ChunkSize);
+
+        var allItems = new List<ExtractedExpenseItem>();
+        for (var ci = 0; ci < chunks.Count; ci++)
+        {
+            var chunkItems = await ExtractChunkWithRetryAsync(chunks[ci], ci + 1, chunks.Count);
+            allItems.AddRange(chunkItems);
+        }
+
+        // Remove duplicatas exatas (title + amount + date)
+        var distinct = allItems
+            .GroupBy(x => $"{x.Title}|{x.Amount}|{x.Date}")
+            .Select(g => g.First())
+            .ToList();
+
+        logger.LogInformation("Extração concluída: {Total} lançamentos ({Chunks} chunks)", distinct.Count, chunks.Count);
+        return distinct;
+    }
+
+    private async Task<IEnumerable<ExtractedExpenseItem>> ExtractChunkWithRetryAsync(
+        string chunk, int chunkNum, int totalChunks)
+    {
+        // Budgets de retry: se 413 ocorrer, reduz o payload particionando o chunk
+        int[] retryBudgets = [chunk.Length, (int)(chunk.Length * 0.70), (int)(chunk.Length * 0.50)];
+
         var client = httpFactory.CreateClient();
         client.DefaultRequestHeaders.Authorization =
             new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", apiKey);
 
-        for (var i = 0; i < PromptCharBudgets.Length; i++)
+        for (var i = 0; i < retryBudgets.Length; i++)
         {
-            var budget = PromptCharBudgets[i];
-            var truncated = pdfText[..Math.Min(pdfText.Length, budget)];
+            var budget = retryBudgets[i];
+            var text = chunk[..Math.Min(chunk.Length, budget)];
+
+            var userContent = totalChunks > 1
+                ? $"Extrato parte {chunkNum}/{totalChunks}. Extraia os lançamentos deste trecho:\n\n{text}"
+                : $"Extraia TODOS os lançamentos desta fatura:\n\n{text}";
+
             var requestBody = new
             {
                 model,
                 messages = new[]
                 {
                     new { role = "system", content = SystemPrompt },
-                    new { role = "user", content = $"Extraia TODOS os lançamentos deste extrato/fatura:\n\n{truncated}" }
+                    new { role = "user",   content = userContent }
                 },
-                temperature = 0.1,
-                max_tokens = 4096
+                temperature = 0.0,
+                max_tokens = MaxTokensOutput
             };
 
             var json = JsonSerializer.Serialize(requestBody);
@@ -63,36 +100,59 @@ public class OpenAiCompatibleExtractor(
                 if (response.StatusCode == HttpStatusCode.RequestEntityTooLarge ||
                     (int)response.StatusCode == 413)
                 {
-                    if (i < PromptCharBudgets.Length - 1)
-                    {
-                        logger.LogWarning(
-                            "Provider retornou 413 para {Chars} chars. Reduzindo payload.",
-                            budget);
-                        continue;
-                    }
+                    var errBody = await response.Content.ReadAsStringAsync();
+                    logger.LogWarning("413 chunk={Chunk} budget={Budget}: {Err}",
+                        chunkNum, budget, errBody[..Math.Min(200, errBody.Length)]);
 
-                    logger.LogWarning("413 persistente após todos os budgets ({Chars} chars).", budget);
+                    if (i < retryBudgets.Length - 1) continue;
+
+                    // Último retry: retorna lista vazia para este chunk em vez de falhar tudo
+                    logger.LogWarning("Chunk {Chunk} ignorado após todos os retries (413 persistente)", chunkNum);
+                    return [];
+                }
+
+                if (response.StatusCode == HttpStatusCode.TooManyRequests || (int)response.StatusCode == 429)
+                {
+                    var errBody = await response.Content.ReadAsStringAsync();
                     throw new InvalidOperationException(
-                        "O conteúdo do PDF excedeu o limite aceito pelo provedor de IA. " +
-                        "Tente um PDF menor ou divida o documento em partes.");
+                        "Limite de requisições da API de IA atingido. Aguarde alguns minutos e tente novamente.");
                 }
 
                 response.EnsureSuccessStatusCode();
                 var responseJson = await response.Content.ReadAsStringAsync();
+                logger.LogInformation("Chunk {Chunk}/{Total} OK: {Chars} chars enviados", chunkNum, totalChunks, budget);
                 return ParseResponse(responseJson);
             }
-            catch (InvalidOperationException)
-            {
-                throw; // propaga mensagem amigável sem logar stack trace
-            }
+            catch (InvalidOperationException) { throw; }
             catch (Exception ex)
             {
-                logger.LogError(ex, "Erro ao chamar {BaseUrl} com modelo {Model}", baseUrl, model);
+                logger.LogError(ex, "Erro no chunk {Chunk} com {BaseUrl}", chunkNum, baseUrl);
                 throw;
             }
         }
 
-        throw new InvalidOperationException("Falha inesperada no loop de retry da IA.");
+        return [];
+    }
+
+    private static List<string> SplitIntoChunks(string text, int chunkSize)
+    {
+        if (text.Length <= chunkSize) return [text];
+
+        var chunks = new List<string>();
+        var pos = 0;
+        while (pos < text.Length)
+        {
+            var end = Math.Min(pos + chunkSize, text.Length);
+            // Tenta quebrar em newline para não cortar no meio de uma linha
+            if (end < text.Length)
+            {
+                var lastNewline = text.LastIndexOf('\n', end, Math.Min(200, end - pos));
+                if (lastNewline > pos) end = lastNewline + 1;
+            }
+            chunks.Add(text[pos..end]);
+            pos = end;
+        }
+        return chunks;
     }
 
     private IEnumerable<ExtractedExpenseItem> ParseResponse(string responseJson)
