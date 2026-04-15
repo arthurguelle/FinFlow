@@ -59,33 +59,23 @@ public class OpenAiCompatibleExtractor(
             try
             {
                 using var response = await client.PostAsync($"{baseUrl}/chat/completions", content);
-
-                if (response.StatusCode == HttpStatusCode.RequestEntityTooLarge)
-                {
-                    if (i < PromptCharBudgets.Length - 1)
-                    {
-                        logger.LogWarning(
-                            "Provider retornou 413 para {Chars} chars. Tentando novamente com payload menor.",
-                            budget);
-                        continue;
-                    }
-
-                    throw new HttpRequestException(
-                        "O payload enviado para a IA excede o limite aceito pelo provider.",
-                        null,
-                        HttpStatusCode.RequestEntityTooLarge);
-                }
-
                 response.EnsureSuccessStatusCode();
                 var responseJson = await response.Content.ReadAsStringAsync();
                 return ParseResponse(responseJson);
             }
-            catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.RequestEntityTooLarge && i < PromptCharBudgets.Length - 1)
+            catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.RequestEntityTooLarge)
             {
-                logger.LogWarning(
-                    "Falha 413 para {Chars} chars em {BaseUrl}. Reduzindo payload.",
-                    budget,
-                    baseUrl);
+                if (i < PromptCharBudgets.Length - 1)
+                {
+                    logger.LogWarning(
+                        "Provider retornou 413 para {Chars} chars. Reduzindo payload e tentando novamente.",
+                        budget);
+                    continue;
+                }
+
+                // Último budget esgotado — re-throw preservando StatusCode e mensagem original
+                logger.LogWarning("Todos os tamanhos de payload esgotados ({Chars} chars mínimo).", budget);
+                throw;
             }
             catch (Exception ex)
             {
@@ -94,10 +84,8 @@ public class OpenAiCompatibleExtractor(
             }
         }
 
-        throw new HttpRequestException(
-            "Não foi possível enviar o conteúdo do PDF para a IA dentro do limite de tamanho do provider.",
-            null,
-            HttpStatusCode.RequestEntityTooLarge);
+        // Nunca alcançado (o re-throw acima sai do loop), mas necessário para o compilador
+        throw new InvalidOperationException("Falha inesperada no loop de retry da IA.");
     }
 
     private IEnumerable<ExtractedExpenseItem> ParseResponse(string responseJson)
