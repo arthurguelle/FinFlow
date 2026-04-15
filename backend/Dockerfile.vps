@@ -2,6 +2,19 @@
 FROM mcr.microsoft.com/dotnet/aspnet:10.0
 WORKDIR /app
 
+# ── Python + Tesseract (OCR para PDFs escaneados) ─────────────────────────────
+# Necessário apenas quando PDF:ExtractorEngine=python (padrão em prod)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 python3-pip \
+    tesseract-ocr tesseract-ocr-por \
+    poppler-utils \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY pdf_extractor/ ./pdf_extractor/
+RUN pip3 install --no-cache-dir --break-system-packages \
+    -r ./pdf_extractor/requirements.txt
+
+# ── App .NET ──────────────────────────────────────────────────────────────────
 COPY publish/ .
 
 ENV ASPNETCORE_URLS=http://+:8080
