@@ -42,9 +42,18 @@ public class OpenAiCompatibleExtractor(
         var chunks = SplitIntoChunks(pdfText, ChunkSize);
         logger.LogInformation("Processando PDF em {Count} chunk(s) de até {Size} chars", chunks.Count, ChunkSize);
 
+        // Delay entre chunks para evitar rate limit (429) no plano gratuito do Groq.
+        // Groq free tier: ~30 req/min — 3s de intervalo é suficiente para 4 chunks.
+        const int DelayBetweenChunksMs = 3000;
+
         var allItems = new List<ExtractedExpenseItem>();
         for (var ci = 0; ci < chunks.Count; ci++)
         {
+            if (ci > 0)
+            {
+                logger.LogInformation("Aguardando {Delay}ms antes do chunk {Num} (rate limit)", DelayBetweenChunksMs, ci + 1);
+                await Task.Delay(DelayBetweenChunksMs);
+            }
             var chunkItems = await ExtractChunkWithRetryAsync(chunks[ci], ci + 1, chunks.Count);
             allItems.AddRange(chunkItems);
         }
