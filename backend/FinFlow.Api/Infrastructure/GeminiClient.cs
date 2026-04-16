@@ -30,7 +30,7 @@ public class GeminiClient(IHttpClientFactory httpFactory, IConfiguration config,
         if (string.IsNullOrWhiteSpace(_apiKey))
             throw new InvalidOperationException("GEMINI:ApiKey não configurada.");
 
-        var prompt = PromptTemplate.Replace("{TEXT}", pdfText[..Math.Min(pdfText.Length, 8000)]);
+        var prompt = PromptTemplate.Replace("{TEXT}", pdfText);
         var requestBody = new
         {
             contents = new[] { new { parts = new[] { new { text = prompt } } } }

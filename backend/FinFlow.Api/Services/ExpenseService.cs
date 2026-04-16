@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using Microsoft.EntityFrameworkCore;
 using UglyToad.PdfPig;
 using UglyToad.PdfPig.Content;
@@ -19,7 +20,12 @@ public interface IExpenseService
     Task<PdfExtractResponse> ExtractFromPdfAsync(Guid userId, IFormFile file, string? password = null);
 }
 
-public class ExpenseService(AppDbContext db, IAiExtractor ai, IWebHostEnvironment env) : IExpenseService
+public class ExpenseService(
+    AppDbContext db,
+    IAiExtractor ai,
+    IWebHostEnvironment env,
+    IConfiguration config,
+    ILogger<ExpenseService> logger) : IExpenseService
 {
     public async Task<IEnumerable<ExpenseDto>> GetAllAsync(Guid userId, int? year, int? month)
     {
@@ -146,17 +152,46 @@ public class ExpenseService(AppDbContext db, IAiExtractor ai, IWebHostEnvironmen
 
         try
         {
-            // Extrai texto do PDF usando iTextSharp ou similar
-            // Por ora, lemos como bytes e enviamos o nome como contexto ao Gemini
-            // Em produção, usar uma lib de extração de texto PDF
-            var pdfText = await ExtractTextFromPdfAsync(filePath, password);
-            var items = await ai.ExtractExpensesFromTextAsync(pdfText);
+            var pdfText = await ExtractPdfTextAsync(filePath, password);
+            var processedText = PdfTextPreprocessor.Preprocess(pdfText);
+            var items = await ai.ExtractExpensesFromTextAsync(processedText);
             return new PdfExtractResponse(items, items.Count());
         }
         finally
         {
             File.Delete(filePath);
         }
+    }
+
+    /// <summary>
+    /// Seleciona o engine de extração conforme PDF:ExtractorEngine (python|legacy).
+    /// Fallback automático para legacy se Python não estiver disponível.
+    /// </summary>
+    private async Task<string> ExtractPdfTextAsync(string filePath, string? password)
+    {
+        var engine = (config["PDF:ExtractorEngine"] ?? "legacy").ToLowerInvariant();
+
+        if (engine == "python")
+        {
+            try
+            {
+                return await PythonPdfExtractor.ExtractAsync(filePath, password, config, logger);
+            }
+            catch (Win32Exception ex)
+            {
+                logger.LogWarning(ex,
+                    "Python não encontrado. Caindo para engine legacy (PdfPig). " +
+                    "Configure PDF:ExtractorEngine=legacy para suprimir este aviso.");
+            }
+            catch (FileNotFoundException ex)
+            {
+                logger.LogWarning(ex,
+                    "Script Python não localizado. Caindo para engine legacy (PdfPig).");
+            }
+            // Se Python falhou por motivo de infra, usamos o legacy como fallback
+        }
+
+        return await ExtractTextFromPdfAsync(filePath, password);
     }
 
     private static Task<string> ExtractTextFromPdfAsync(string filePath, string? password = null)

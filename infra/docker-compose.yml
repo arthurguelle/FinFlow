@@ -51,6 +51,9 @@ services:
       AI__Model: ${AI_GROQ_MODEL:-llama-3.1-8b-instant}
       GEMINI__ApiKey: ${GEMINI_API_KEY:-}
       CORS__AllowedOrigins: ${CORS_ORIGINS:-http://localhost:4200}
+      PDF__ExtractorEngine: ${PDF_EXTRACTOR_ENGINE:-legacy}
+      PDF__ExtractorPython: ${PDF_EXTRACTOR_PYTHON:-python3}
+      PDF__ExtractorScript: ${PDF_EXTRACTOR_SCRIPT:-./pdf_extractor/extract.py}
     ports:
       - "${BACKEND_PORT:-5000}:8080"
     depends_on:
