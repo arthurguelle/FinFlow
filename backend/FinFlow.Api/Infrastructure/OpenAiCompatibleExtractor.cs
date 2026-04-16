@@ -42,9 +42,8 @@ public class OpenAiCompatibleExtractor(
         var chunks = SplitIntoChunks(pdfText, ChunkSize);
         logger.LogInformation("Processando PDF em {Count} chunk(s) de até {Size} chars", chunks.Count, ChunkSize);
 
-        // Delay entre chunks para evitar rate limit (429) no plano gratuito do Groq.
-        // Groq free tier: ~6000 tokens/min — 10s de intervalo distribui os chunks ok.
-        const int DelayBetweenChunksMs = 10000;
+        // Groq free tier: 6K tokens/min, ~1500 tokens/request → max ~4 req/min → 15s de intervalo.
+        const int DelayBetweenChunksMs = 15000;
 
         var allItems = new List<ExtractedExpenseItem>();
         for (var ci = 0; ci < chunks.Count; ci++)
@@ -77,6 +76,9 @@ public class OpenAiCompatibleExtractor(
         var client = httpFactory.CreateClient();
         client.DefaultRequestHeaders.Authorization =
             new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", apiKey);
+
+        var rateRetries = 0;
+        const int MaxRateRetries = 3;
 
         for (var i = 0; i < retryBudgets.Length; i++)
         {
@@ -122,9 +124,33 @@ public class OpenAiCompatibleExtractor(
 
                 if (response.StatusCode == HttpStatusCode.TooManyRequests || (int)response.StatusCode == 429)
                 {
-                    var errBody = await response.Content.ReadAsStringAsync();
-                    throw new InvalidOperationException(
-                        "Limite de requisições da API de IA atingido. Aguarde alguns minutos e tente novamente.");
+                    // Lê Retry-After do header (Groq retorna o tempo exato em segundos)
+                    var retryAfterSec = 20; // fallback
+                    if (response.Headers.TryGetValues("Retry-After", out var raValues) &&
+                        int.TryParse(raValues.FirstOrDefault(), out var parsed))
+                    {
+                        retryAfterSec = parsed + 2; // +2s de margem
+                    }
+                    else if (response.Headers.TryGetValues("x-ratelimit-reset-tokens", out var rtValues))
+                    {
+                        // Groq retorna formato "1.234s" ou "10s"
+                        var rtRaw = rtValues.FirstOrDefault() ?? "";
+                        if (rtRaw.EndsWith("s") && double.TryParse(
+                            rtRaw.TrimEnd('s'),
+                            System.Globalization.NumberStyles.Float,
+                            System.Globalization.CultureInfo.InvariantCulture, out var secs))
+                        {
+                            retryAfterSec = (int)Math.Ceiling(secs) + 2;
+                        }
+                    }
+                    logger.LogWarning("429 chunk={Chunk} — aguardando {Sec}s antes de retry", chunkNum, retryAfterSec);
+                    await Task.Delay(retryAfterSec * 1000);
+                    // Não incrementa i — repete o mesmo budget
+                    rateRetries++;
+                    if (rateRetries >= MaxRateRetries)
+                        throw new InvalidOperationException("Limite de requisições da API de IA atingido após 3 tentativas. Tente novamente em alguns minutos.");
+                    i--;
+                    continue;
                 }
 
                 response.EnsureSuccessStatusCode();
