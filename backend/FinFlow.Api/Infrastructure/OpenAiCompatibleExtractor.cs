@@ -43,8 +43,8 @@ public class OpenAiCompatibleExtractor(
         logger.LogInformation("Processando PDF em {Count} chunk(s) de até {Size} chars", chunks.Count, ChunkSize);
 
         // Delay entre chunks para evitar rate limit (429) no plano gratuito do Groq.
-        // Groq free tier: ~30 req/min — 3s de intervalo é suficiente para 4 chunks.
-        const int DelayBetweenChunksMs = 3000;
+        // Groq free tier: ~6000 tokens/min — 10s de intervalo distribui os chunks ok.
+        const int DelayBetweenChunksMs = 10000;
 
         var allItems = new List<ExtractedExpenseItem>();
         for (var ci = 0; ci < chunks.Count; ci++)
