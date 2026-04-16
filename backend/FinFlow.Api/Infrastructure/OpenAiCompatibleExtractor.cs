@@ -19,7 +19,7 @@ public class OpenAiCompatibleExtractor(
     // Tamanhos de chunk para processar o PDF em partes quando necessário.
     // Groq llama-3.1-8b free tier aceita ~4000 chars por chamada sem 413.
     private const int ChunkSize = 3500;
-    private const int MaxTokensOutput = 2048;
+    private const int MaxTokensOutput = 8192; // llama-3.1-8b-instant suporta até 8192 output tokens
 
     private const string SystemPrompt = """
         Você é um extrator de lançamentos financeiros de faturas de cartão de crédito brasileiras.
@@ -224,6 +224,11 @@ public class OpenAiCompatibleExtractor(
         var end = textContent.LastIndexOf('}');
         if (start >= 0 && end > start)
             textContent = textContent[start..(end + 1)];
+        else if (start >= 0)
+        {
+            // JSON truncado (max_tokens atingido): tenta fechar o array e o objeto
+            textContent = textContent[start..].TrimEnd().TrimEnd(',') + "]}"; 
+        }
 
         using var resultDoc = JsonDocument.Parse(textContent);
         var items = new List<ExtractedExpenseItem>();
