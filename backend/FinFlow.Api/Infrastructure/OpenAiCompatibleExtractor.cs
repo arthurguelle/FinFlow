@@ -19,7 +19,9 @@ public class OpenAiCompatibleExtractor(
     // Tamanhos de chunk para processar o PDF em partes quando necessário.
     // Groq llama-3.1-8b free tier aceita ~4000 chars por chamada sem 413.
     private const int ChunkSize = 3500;
-    private const int MaxTokensOutput = 8192; // llama-3.1-8b-instant suporta até 8192 output tokens
+    // 4096 tokens é suficiente para ~80 itens de fatura. Limitar evita que o modelo
+    // entre em loop gerando itens repetidos infinitamente.
+    private const int MaxTokensOutput = 4096;
 
     private const string SystemPrompt = """
         Você é um extrator de lançamentos financeiros de faturas de cartão de crédito brasileiras.
@@ -219,31 +221,48 @@ public class OpenAiCompatibleExtractor(
             textContent = string.Join('\n', lines[1..^1]).Trim();
         }
 
-        // Encontra JSON mesmo que haja texto antes/depois
         var start = textContent.IndexOf('{');
-        var end = textContent.LastIndexOf('}');
-        if (start >= 0 && end > start)
-            textContent = textContent[start..(end + 1)];
-        else if (start >= 0)
+        if (start < 0) return [];
+
+        var candidate = textContent[start..];
+
+        // Estratégia 1: JSON completo e válido
+        var end = candidate.LastIndexOf('}');
+        if (end > 0)
         {
-            // JSON truncado (max_tokens atingido): tenta fechar o array e o objeto
-            textContent = textContent[start..].TrimEnd().TrimEnd(',') + "]}"; 
+            try { return ExtractFromDoc(candidate[..(end + 1)]); }
+            catch { /* truncado — continua */ }
         }
 
-        using var resultDoc = JsonDocument.Parse(textContent);
-        var items = new List<ExtractedExpenseItem>();
+        // Estratégia 2: truncado no meio de um item
+        // Localiza o último item COMPLETO (termina com "},")
+        var lastComma = candidate.LastIndexOf("},");
+        if (lastComma > 0)
+        {
+            try { return ExtractFromDoc(candidate[..(lastComma + 1)] + "]}"); }
+            catch { /* continua */ }
+        }
 
-        foreach (var item in resultDoc.RootElement.GetProperty("items").EnumerateArray())
+        // Estratégia 3: fecha a estrutura na força bruta
+        try { return ExtractFromDoc(candidate.TrimEnd().TrimEnd(',') + "]}"); }
+        catch { }
+
+        return [];
+    }
+
+    private static List<ExtractedExpenseItem> ExtractFromDoc(string json)
+    {
+        using var doc = JsonDocument.Parse(json);
+        var items = new List<ExtractedExpenseItem>();
+        foreach (var item in doc.RootElement.GetProperty("items").EnumerateArray())
         {
             var title = item.GetProperty("title").GetString() ?? "Gasto";
             var amount = item.GetProperty("amount").GetDecimal();
             var dateStr = item.GetProperty("date").GetString()
                 ?? DateOnly.FromDateTime(DateTime.Today).ToString("yyyy-MM-dd");
-
             if (DateOnly.TryParse(dateStr, out var date))
                 items.Add(new ExtractedExpenseItem(title, amount, date));
         }
-
         return items;
     }
 }
