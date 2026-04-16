@@ -1,9 +1,16 @@
 #!/bin/bash
 # deploy.sh — Script de deploy FinFlow para VPS
-# Uso: ./deploy.sh
+# Uso completo:        ./deploy.sh
+# Só backend (rápido): ./deploy.sh --backend-only
+#
+# IMPORTANTE: NUNCA use "docker compose restart" para atualizar código.
+# O Dockerfile copia os binários durante o BUILD. Sempre rebuilde com --build.
 # Pré-requisitos locais: git, dotnet, node/npm, rsync (ou scp), ssh
 
 set -e  # para no primeiro erro
+
+BACKEND_ONLY=false
+[[ "$1" == "--backend-only" ]] && BACKEND_ONLY=true
 
 # ── Configurações da VPS (edite aqui) ────────────────────────────────────────
 VPS_USER="ubuntu"
@@ -44,12 +51,16 @@ command -v rsync  >/dev/null || warn "rsync não encontrado — usando scp como 
 [ "$VPS_HOST" = "SEU_IP_OU_DOMINIO" ] && fail "Configure VPS_HOST no script antes de rodar!"
 
 # ── 2. Build do Frontend ──────────────────────────────────────────────────────
-log "Build do Frontend Angular (produção)..."
-cd frontend
-npm ci --silent
-npx ng build --configuration=production
-cd ..
-log "Frontend gerado em frontend/dist/"
+if [ "$BACKEND_ONLY" = false ]; then
+  log "Build do Frontend Angular (produção)..."
+  cd frontend
+  npm ci --silent
+  npx ng build --configuration=production
+  cd ..
+  log "Frontend gerado em frontend/dist/"
+else
+  warn "Modo --backend-only: build do frontend ignorado."
+fi
 
 # ── 3. Publish do Backend ─────────────────────────────────────────────────────
 log "Publish do Backend .NET 10..."
@@ -96,14 +107,21 @@ _send() {
 }
 
 # Frontend (dist)
-_send "frontend/dist/finflow/browser/" "${VPS_DIR}/frontend/dist/finflow/browser/"
+if [ "$BACKEND_ONLY" = false ]; then
+  _send "frontend/dist/finflow/browser/" "${VPS_DIR}/frontend/dist/finflow/browser/"
+fi
 
 # Backend (publish + Dockerfile.vps)
 _send "backend/publish/"        "${VPS_DIR}/backend/publish/"
 _send "backend/Dockerfile.vps"  "${VPS_DIR}/backend/Dockerfile.vps"
 
+# Backend: pdf_extractor (Python)
+_send "backend/pdf_extractor/"  "${VPS_DIR}/backend/pdf_extractor/"
+
 # Scripts SQL
-_send "database/" "${VPS_DIR}/database/"
+if [ "$BACKEND_ONLY" = false ]; then
+  _send "database/" "${VPS_DIR}/database/"
+fi
 
 # Infra (compose + nginx)
 _send "infra/docker-compose.yml" "${VPS_DIR}/infra/docker-compose.yml"
@@ -128,8 +146,13 @@ ssh $SSH_OPTS ${VPS_USER}@${VPS_HOST} bash <<REMOTE
   set -e
   cd ${VPS_DIR}/infra
 
-  sudo docker compose down --remove-orphans 2>/dev/null || true
-  sudo docker compose up -d --build
+  if [ "$BACKEND_ONLY" = "true" ]; then
+    # Rebuild apenas o serviço backend (camadas de apt/pip ficam em cache)
+    sudo docker compose up -d --build backend
+  else
+    sudo docker compose down --remove-orphans 2>/dev/null || true
+    sudo docker compose up -d --build
+  fi
 
   echo ""
   echo "Status dos containers:"
