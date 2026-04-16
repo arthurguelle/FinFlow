@@ -100,9 +100,11 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 // ── Endpoints ─────────────────────────────────────────────────────────────────
-app.MapHealthEndpoints();
 app.MapAuthEndpoints();
 app.MapMovementEndpoints();
 app.MapExpenseEndpoints();
+
+app.MapGet("/health", () => Results.Ok(new { status = "ok", timestamp = DateTime.UtcNow }))
+   .WithTags("Health");
 
 app.Run();
