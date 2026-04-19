@@ -22,6 +22,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.Property(u => u.Email).HasColumnName("email").HasMaxLength(255).IsRequired();
             e.Property(u => u.PasswordHash).HasColumnName("password_hash").IsRequired();
             e.Property(u => u.IsActive).HasColumnName("is_active");
+            e.Property(u => u.Role).HasColumnName("role").HasMaxLength(20).HasDefaultValue("user");
             e.Property(u => u.CreatedAt).HasColumnName("created_at");
             e.Property(u => u.UpdatedAt).HasColumnName("updated_at");
             e.Property(u => u.DeletedAt).HasColumnName("deleted_at");

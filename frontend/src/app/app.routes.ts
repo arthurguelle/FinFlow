@@ -1,5 +1,5 @@
 import { Routes } from "@angular/router";
-import { authGuard, guestGuard } from "./core/guards/auth.guard";
+import { authGuard, guestGuard, adminGuard } from "./core/guards/auth.guard";
 
 export const routes: Routes = [
   { path: "", redirectTo: "dashboard", pathMatch: "full" },
@@ -22,6 +22,11 @@ export const routes: Routes = [
     path: "movements",
     loadComponent: () => import("./features/movements/movements.component").then(m => m.MovementsComponent),
     canActivate: [authGuard],
+  },
+  {
+    path: "users",
+    loadComponent: () => import("./features/users/users.component").then(m => m.UsersComponent),
+    canActivate: [adminGuard],
   },
   { path: "**", redirectTo: "dashboard" },
 ];

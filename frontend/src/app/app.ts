@@ -26,6 +26,9 @@ import { AuthService } from "./core/services/auth.service";
           <a mat-button routerLink="/dashboard" routerLinkActive="active-link">Dashboard</a>
           <a mat-button routerLink="/expenses" routerLinkActive="active-link">Gastos</a>
           <a mat-button routerLink="/movements" routerLinkActive="active-link">Categorias</a>
+          @if (isAdmin) {
+            <a mat-button routerLink="/users" routerLinkActive="active-link">Usuários</a>
+          }
         </nav>
         <span class="spacer"></span>
         <button mat-icon-button [matMenuTriggerFor]="userMenu">
@@ -56,6 +59,7 @@ import { AuthService } from "./core/services/auth.service";
 export class App {
   get isLoggedIn() { return this.storage.isLoggedIn(); }
   get user() { return this.storage.user(); }
+  get isAdmin() { return this.storage.user()?.role === 'admin'; }
 
   constructor(
     private storage: StorageService,

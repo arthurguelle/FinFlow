@@ -2,7 +2,7 @@ import { Injectable } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
-import { ApiResponse, Expense, Summary, PdfExtractResponse, Movement } from '../models/models';
+import { ApiResponse, Expense, Summary, PdfExtractResponse, Movement, AdminUser } from '../models/models';
 
 @Injectable({ providedIn: 'root' })
 export class ExpenseService {
@@ -72,6 +72,33 @@ export class MovementService {
 
   update(id: string, data: Partial<Movement>): Observable<ApiResponse<Movement>> {
     return this.http.put<ApiResponse<Movement>>(`${this.url}/${id}`, data);
+  }
+
+  delete(id: string): Observable<void> {
+    return this.http.delete<void>(`${this.url}/${id}`);
+  }
+}
+
+@Injectable({ providedIn: 'root' })
+export class AdminUserService {
+  private readonly url = `${environment.apiUrl}/admin/users`;
+
+  constructor(private http: HttpClient) {}
+
+  getAll(): Observable<ApiResponse<AdminUser[]>> {
+    return this.http.get<ApiResponse<AdminUser[]>>(this.url);
+  }
+
+  create(data: { name: string; email: string; password: string; role: string }): Observable<ApiResponse<AdminUser>> {
+    return this.http.post<ApiResponse<AdminUser>>(this.url, data);
+  }
+
+  update(id: string, data: { name: string; email: string; role: string; isActive: boolean }): Observable<ApiResponse<AdminUser>> {
+    return this.http.put<ApiResponse<AdminUser>>(`${this.url}/${id}`, data);
+  }
+
+  changePassword(id: string, newPassword: string): Observable<void> {
+    return this.http.post<void>(`${this.url}/${id}/change-password`, { newPassword });
   }
 
   delete(id: string): Observable<void> {

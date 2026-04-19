@@ -97,7 +97,7 @@ public class AuthService(AppDbContext db, JwtHelper jwt, ILogger<AuthService> lo
             accessToken,
             refreshTokenValue,
             expiresAt,
-            new UserDto(user.Id, user.Name, user.Email)
+            new UserDto(user.Id, user.Name, user.Email, user.Role)
         );
     }
 }

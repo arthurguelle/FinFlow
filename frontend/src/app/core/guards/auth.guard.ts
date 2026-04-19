@@ -13,3 +13,10 @@ export const guestGuard: CanActivateFn = () => {
   const router = inject(Router);
   return !storage.isLoggedIn() ? true : router.createUrlTree(['/dashboard']);
 };
+
+export const adminGuard: CanActivateFn = () => {
+  const storage = inject(StorageService);
+  const router = inject(Router);
+  if (!storage.isLoggedIn()) return router.createUrlTree(['/login']);
+  return storage.user()?.role === 'admin' ? true : router.createUrlTree(['/dashboard']);
+};

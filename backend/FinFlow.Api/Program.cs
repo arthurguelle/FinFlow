@@ -91,6 +91,7 @@ builder.Services.AddSingleton<GeminiClient>(); // mantido para compatibilidade
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IMovementService, MovementService>();
 builder.Services.AddScoped<IExpenseService, ExpenseService>();
+builder.Services.AddScoped<IAdminService, AdminService>();
 
 // ── Pipeline ──────────────────────────────────────────────────────────────────
 var app = builder.Build();
@@ -103,6 +104,7 @@ app.UseAuthorization();
 app.MapAuthEndpoints();
 app.MapMovementEndpoints();
 app.MapExpenseEndpoints();
+app.MapAdminEndpoints();
 
 app.MapGet("/health", () => Results.Ok(new { status = "ok", timestamp = DateTime.UtcNow }))
    .WithTags("Health");

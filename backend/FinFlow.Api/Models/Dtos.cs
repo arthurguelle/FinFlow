@@ -19,7 +19,20 @@ public record AuthResponse(
     UserDto User
 );
 
-public record UserDto(Guid Id, string Name, string Email);
+public record UserDto(Guid Id, string Name, string Email, string Role);
+
+// ── Admin / User Management ──────────────────────────────────────────────────
+public record AdminUserDto(
+    Guid Id,
+    string Name,
+    string Email,
+    string Role,
+    bool IsActive,
+    DateTime CreatedAt
+);
+public record CreateUserRequest(string Name, string Email, string Password, string Role = "user");
+public record UpdateUserRequest(string Name, string Email, string Role, bool IsActive);
+public record ChangePasswordRequest(string NewPassword);
 
 // ── Movement DTOs ────────────────────────────────────────────────────────────
 public record CreateMovementRequest(string Title, string? Description, string Type);
