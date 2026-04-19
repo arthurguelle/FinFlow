@@ -18,6 +18,8 @@ public interface IExpenseService
     Task<SummaryDto> GetSummaryAsync(Guid userId, int? year, int? month);
     Task<PdfExtractResponse> ExtractFromPdfAsync(Guid userId, IFormFile file, string? password = null);
     Task<PdfExtractResponse> ExtractFromTextAsync(Guid userId, string text);
+    Task BulkClassifyAsync(Guid userId, List<Guid> ids, Guid? movementId);
+    Task BulkDeleteAsync(Guid userId, List<Guid> ids);
 }
 
 public class ExpenseService(
@@ -169,6 +171,34 @@ public class ExpenseService(
         var processedText = PdfTextPreprocessor.Preprocess(text);
         var items = await ai.ExtractExpensesFromTextAsync(processedText);
         return new PdfExtractResponse(items, items.Count());
+    }
+
+    public async Task BulkClassifyAsync(Guid userId, List<Guid> ids, Guid? movementId)
+    {
+        var expenses = await db.Expenses
+            .Where(e => ids.Contains(e.Id) && e.UserId == userId && e.DeletedAt == null)
+            .ToListAsync();
+
+        var now = DateTime.UtcNow;
+        foreach (var e in expenses)
+        {
+            e.MovementId = movementId;
+            e.UpdatedAt = now;
+        }
+        await db.SaveChangesAsync();
+    }
+
+    public async Task BulkDeleteAsync(Guid userId, List<Guid> ids)
+    {
+        var expenses = await db.Expenses
+            .Where(e => ids.Contains(e.Id) && e.UserId == userId && e.DeletedAt == null)
+            .ToListAsync();
+
+        var now = DateTime.UtcNow;
+        foreach (var e in expenses)
+            e.DeletedAt = now;
+
+        await db.SaveChangesAsync();
     }
 
     private static Task<string> ExtractPdfTextAsync(string filePath, string? password)

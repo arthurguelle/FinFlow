@@ -145,6 +145,28 @@ public static class ExpenseEndpoints
                     $"Erro ao comunicar com a IA: {ex.Message}"));
             }
         });
+
+        // Classificação em massa
+        group.MapPost("/bulk-classify", async (BulkClassifyRequest request, ClaimsPrincipal user, IExpenseService service) =>
+        {
+            if (request.Ids is null || request.Ids.Count == 0)
+                return Results.BadRequest(ApiResponse<object>.Fail("Nenhum ID informado."));
+
+            var userId = GetUserId(user);
+            await service.BulkClassifyAsync(userId, request.Ids, request.MovementId);
+            return Results.Ok(ApiResponse<object>.Ok(new { count = request.Ids.Count }));
+        });
+
+        // Exclusão em massa
+        group.MapPost("/bulk-delete", async (BulkDeleteRequest request, ClaimsPrincipal user, IExpenseService service) =>
+        {
+            if (request.Ids is null || request.Ids.Count == 0)
+                return Results.BadRequest(ApiResponse<object>.Fail("Nenhum ID informado."));
+
+            var userId = GetUserId(user);
+            await service.BulkDeleteAsync(userId, request.Ids);
+            return Results.Ok(ApiResponse<object>.Ok(new { count = request.Ids.Count }));
+        });
     }
 
     private static Guid GetUserId(ClaimsPrincipal user) =>

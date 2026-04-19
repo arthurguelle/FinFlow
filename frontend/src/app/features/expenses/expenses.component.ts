@@ -11,9 +11,12 @@ import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatDividerModule } from '@angular/material/divider';
+import { MatCheckboxModule } from '@angular/material/checkbox';
 import { FormsModule } from '@angular/forms';
+import { SelectionModel } from '@angular/cdk/collections';
 import { ExpenseService, MovementService } from '../../core/services/api.service';
 import { Expense, Movement, ExtractedExpenseItem } from '../../core/models/models';
 import { PasteTextDialogComponent } from './paste-text-dialog.component';
@@ -25,7 +28,8 @@ import { PasteTextDialogComponent } from './paste-text-dialog.component';
     CommonModule, ReactiveFormsModule, FormsModule, CurrencyPipe,
     MatCardModule, MatTableModule, MatButtonModule, MatIconModule,
     MatDialogModule, MatFormFieldModule, MatInputModule, MatSelectModule,
-    MatSnackBarModule, MatProgressSpinnerModule, MatChipsModule, MatDividerModule
+    MatSnackBarModule, MatProgressSpinnerModule, MatProgressBarModule,
+    MatChipsModule, MatDividerModule, MatCheckboxModule
   ],
   template: `
     <div class="expenses-page">
@@ -39,11 +43,40 @@ import { PasteTextDialogComponent } from './paste-text-dialog.component';
           <button mat-stroked-button color="accent" (click)="openPasteDialog()">
             <mat-icon>content_paste</mat-icon> Colar Texto
           </button>
+          <button mat-stroked-button (click)="startReview()" [disabled]="filteredExpenses.length === 0">
+            <mat-icon>rate_review</mat-icon> Conferir Gastos
+          </button>
           <button mat-raised-button color="primary" (click)="openForm()">
             <mat-icon>add</mat-icon> Novo Gasto
           </button>
         </div>
       </div>
+
+      <!-- Barra de ações em massa -->
+      @if (selection.hasValue()) {
+        <div class="selection-bar">
+          <mat-icon>check_box</mat-icon>
+          <span class="sel-count">{{ selection.selected.length }} selecionado(s)</span>
+          <mat-form-field appearance="outline" class="bulk-cat-field">
+            <mat-label>Classificar como</mat-label>
+            <mat-select [(ngModel)]="bulkMovementId">
+              <mat-option [value]="null">Sem categoria</mat-option>
+              @for (m of movements; track m.id) {
+                <mat-option [value]="m.id">{{ m.title }}</mat-option>
+              }
+            </mat-select>
+          </mat-form-field>
+          <button mat-stroked-button color="primary" (click)="performBulkClassify()">
+            <mat-icon>label</mat-icon> Classificar
+          </button>
+          <button mat-stroked-button color="warn" (click)="performBulkDelete()">
+            <mat-icon>delete_sweep</mat-icon> Excluir
+          </button>
+          <button mat-button (click)="selection.clear()">
+            <mat-icon>close</mat-icon>
+          </button>
+        </div>
+      }
 
       <!-- Barra de busca + filtros -->
       <div class="search-filter-bar">
@@ -111,6 +144,53 @@ import { PasteTextDialogComponent } from './paste-text-dialog.component';
               </mat-form-field>
             </div>
           </mat-card-content>
+        </mat-card>
+      }
+
+      <!-- Wizard de conferência gasto a gasto -->
+      @if (reviewMode && currentReviewExpense) {
+        <mat-card class="review-card">
+          <mat-card-header>
+            <mat-icon mat-card-avatar>rate_review</mat-icon>
+            <mat-card-title>Conferência de Gastos</mat-card-title>
+            <mat-card-subtitle>{{ reviewIndex + 1 }} de {{ reviewList.length }}</mat-card-subtitle>
+          </mat-card-header>
+          <mat-progress-bar mode="determinate" [value]="(reviewIndex + 1) / reviewList.length * 100"></mat-progress-bar>
+          <mat-card-content class="review-content">
+            <div class="review-expense-info">
+              <span class="review-expense-title">{{ currentReviewExpense.title }}</span>
+              <span class="review-expense-date">{{ currentReviewExpense.expenseDate }}</span>
+              <strong class="review-expense-amount" [class]="currentReviewExpense.movementType ?? 'divida'">
+                {{ currentReviewExpense.amount | currency:'BRL':'symbol':'1.2-2':'pt' }}
+              </strong>
+            </div>
+            <mat-form-field appearance="outline" class="review-category-field">
+              <mat-label>Categoria</mat-label>
+              <mat-select [(ngModel)]="reviewMovementId">
+                <mat-option [value]="null">Sem categoria</mat-option>
+                @for (m of movements; track m.id) {
+                  <mat-option [value]="m.id">{{ m.title }}</mat-option>
+                }
+              </mat-select>
+            </mat-form-field>
+          </mat-card-content>
+          <mat-card-actions class="review-actions">
+            <button mat-button (click)="stopReview()">
+              <mat-icon>close</mat-icon> Encerrar
+            </button>
+            <span class="review-spacer"></span>
+            <button mat-button (click)="reviewPrevious()" [disabled]="reviewIndex === 0 || reviewSaving">
+              <mat-icon>arrow_back</mat-icon> Anterior
+            </button>
+            <button mat-button (click)="reviewSkip()" [disabled]="reviewSaving">
+              Pular <mat-icon>skip_next</mat-icon>
+            </button>
+            <button mat-raised-button color="primary" (click)="reviewSaveAndNext()" [disabled]="reviewSaving">
+              @if (reviewSaving) { <mat-spinner diameter="18" style="display:inline-block"></mat-spinner> }
+              @else { <mat-icon>save</mat-icon> }
+              {{ reviewIndex < reviewList.length - 1 ? 'Salvar e Próximo' : 'Salvar e Concluir' }}
+            </button>
+          </mat-card-actions>
         </mat-card>
       }
 
@@ -237,6 +317,22 @@ import { PasteTextDialogComponent } from './paste-text-dialog.component';
                 </span>
               </div>
               <table mat-table [dataSource]="filteredExpenses" class="full-width">
+                <ng-container matColumnDef="select">
+                  <th mat-header-cell *matHeaderCellDef style="width:48px">
+                    <mat-checkbox
+                      (change)="$event ? masterToggle() : null"
+                      [checked]="selection.hasValue() && isAllSelected()"
+                      [indeterminate]="selection.hasValue() && !isAllSelected()">
+                    </mat-checkbox>
+                  </th>
+                  <td mat-cell *matCellDef="let row">
+                    <mat-checkbox
+                      (click)="$event.stopPropagation()"
+                      (change)="$event ? selection.toggle(row) : null"
+                      [checked]="selection.isSelected(row)">
+                    </mat-checkbox>
+                  </td>
+                </ng-container>
                 <ng-container matColumnDef="date">
                   <th mat-header-cell *matHeaderCellDef>Data</th>
                   <td mat-cell *matCellDef="let e">{{ e.expenseDate }}</td>
@@ -314,13 +410,27 @@ import { PasteTextDialogComponent } from './paste-text-dialog.component';
     .no-category { color: var(--color-text-secondary); }
     mat-chip.receita { background: #e8f5e9 !important; color: #2e7d32 !important; }
     mat-chip.divida { background: #ffebee !important; color: #c62828 !important; }
+    /* Selection bar */
+    .selection-bar { display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem; background: #e3eaf4; border-radius: 8px; margin-bottom: 1rem; flex-wrap: wrap; }
+    .sel-count { font-weight: 500; color: var(--color-primary, #4A6FA5); margin-right: 0.5rem; }
+    .bulk-cat-field { flex: 1; min-width: 180px; max-width: 260px; }
+    /* Review wizard */
+    .review-card { margin-bottom: 1rem; border-left: 4px solid var(--color-primary, #4A6FA5); }
+    .review-content { display: flex; flex-direction: column; gap: 1rem; padding-top: 0.5rem; }
+    .review-expense-info { display: flex; align-items: center; gap: 1.5rem; flex-wrap: wrap; background: #f8f9fa; padding: 0.75rem 1rem; border-radius: 6px; }
+    .review-expense-title { flex: 1; font-size: 1rem; font-weight: 500; }
+    .review-expense-date { color: var(--color-text-secondary, #6C757D); font-size: 0.9rem; }
+    .review-expense-amount { font-size: 1.1rem; }
+    .review-category-field { width: 100%; max-width: 360px; }
+    .review-actions { display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem; }
+    .review-spacer { flex: 1; }
   `]
 })
 export class ExpensesComponent implements OnInit {
   expenses: Expense[] = [];
   movements: Movement[] = [];
   extractedItems: ExtractedExpenseItem[] = [];
-  columns = ['date', 'title', 'movement', 'amount', 'actions'];
+  columns = ['select', 'date', 'title', 'movement', 'amount', 'actions'];
   loading = false;
   extracting = false;
   saving = false;
@@ -329,6 +439,130 @@ export class ExpensesComponent implements OnInit {
   pendingPasswordFile: File | null = null;
   pdfPasswordCtrl = new FormControl('');
   showPassword = false;
+
+  // Multi-seleção
+  selection = new SelectionModel<Expense>(true, []);
+  bulkMovementId: string | null = null;
+
+  // Wizard de conferência
+  reviewMode = false;
+  reviewList: Expense[] = [];
+  reviewIndex = 0;
+  reviewMovementId: string | null = null;
+  reviewSaving = false;
+
+  get currentReviewExpense(): Expense | null {
+    return this.reviewList[this.reviewIndex] ?? null;
+  }
+
+  isAllSelected(): boolean {
+    return this.filteredExpenses.length > 0 &&
+      this.filteredExpenses.every(e => this.selection.isSelected(e));
+  }
+
+  masterToggle(): void {
+    if (this.isAllSelected()) {
+      this.filteredExpenses.forEach(e => this.selection.deselect(e));
+    } else {
+      this.filteredExpenses.forEach(e => this.selection.select(e));
+    }
+  }
+
+  startReview(): void {
+    this.reviewList = [...this.filteredExpenses];
+    this.reviewIndex = 0;
+    this.reviewMovementId = this.reviewList[0]?.movementId ?? null;
+    this.reviewMode = true;
+  }
+
+  stopReview(): void {
+    this.reviewMode = false;
+  }
+
+  reviewPrevious(): void {
+    if (this.reviewIndex > 0) {
+      this.reviewIndex--;
+      this.reviewMovementId = this.currentReviewExpense?.movementId ?? null;
+    }
+  }
+
+  reviewSkip(): void {
+    if (this.reviewIndex < this.reviewList.length - 1) {
+      this.reviewIndex++;
+      this.reviewMovementId = this.currentReviewExpense?.movementId ?? null;
+    } else {
+      this.reviewMode = false;
+      this.snack.open('Conferência concluída!', '', { duration: 2000 });
+    }
+  }
+
+  reviewSaveAndNext(): void {
+    const expense = this.currentReviewExpense;
+    if (!expense) return;
+
+    const changed = (this.reviewMovementId ?? null) !== (expense.movementId ?? null);
+
+    if (changed) {
+      this.reviewSaving = true;
+      this.expenseService.update(expense.id, {
+        title: expense.title,
+        amount: expense.amount,
+        expenseDate: expense.expenseDate,
+        movementId: this.reviewMovementId
+      } as any).subscribe({
+        next: r => {
+          if (r.success && r.data) {
+            const idx = this.expenses.findIndex(e => e.id === expense.id);
+            if (idx >= 0) this.expenses[idx] = r.data!;
+            this.reviewList[this.reviewIndex] = r.data!;
+          }
+          this.reviewSaving = false;
+          this.advanceAfterSave();
+        },
+        error: () => { this.reviewSaving = false; }
+      });
+    } else {
+      this.advanceAfterSave();
+    }
+  }
+
+  private advanceAfterSave(): void {
+    if (this.reviewIndex < this.reviewList.length - 1) {
+      this.reviewIndex++;
+      this.reviewMovementId = this.currentReviewExpense?.movementId ?? null;
+    } else {
+      this.reviewMode = false;
+      this.snack.open('Conferência concluída!', '', { duration: 2000 });
+    }
+  }
+
+  performBulkClassify(): void {
+    if (!this.selection.hasValue()) return;
+    const ids = this.selection.selected.map(e => e.id);
+    this.expenseService.bulkClassify(ids, this.bulkMovementId).subscribe({
+      next: (r: any) => {
+        if (r.success) {
+          this.selection.clear();
+          this.load();
+          this.snack.open('Gastos classificados!', '', { duration: 2000 });
+        }
+      }
+    });
+  }
+
+  performBulkDelete(): void {
+    if (!this.selection.hasValue()) return;
+    const count = this.selection.selected.length;
+    if (!confirm(`Excluir ${count} gasto(s) selecionado(s)? Essa ação não pode ser desfeita.`)) return;
+    const ids = this.selection.selected.map(e => e.id);
+    this.expenseService.bulkDelete(ids).subscribe({
+      next: () => {
+        this.selection.clear();
+        this.load();
+        this.snack.open(`${count} gasto(s) excluído(s)!`, '', { duration: 2000 });
+      }
+    });
+  }
 
   // Busca e filtros
   searchText = '';

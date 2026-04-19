@@ -46,6 +46,14 @@ export class ExpenseService {
   extractFromText(text: string): Observable<ApiResponse<PdfExtractResponse>> {
     return this.http.post<ApiResponse<PdfExtractResponse>>(`${this.url}/extract-text`, { text });
   }
+
+  bulkClassify(ids: string[], movementId: string | null): Observable<ApiResponse<unknown>> {
+    return this.http.post<ApiResponse<unknown>>(`${this.url}/bulk-classify`, { ids, movementId });
+  }
+
+  bulkDelete(ids: string[]): Observable<ApiResponse<unknown>> {
+    return this.http.post<ApiResponse<unknown>>(`${this.url}/bulk-delete`, { ids });
+  }
 }
 
 @Injectable({ providedIn: 'root' })
