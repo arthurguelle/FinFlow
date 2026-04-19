@@ -102,7 +102,8 @@ _send() {
   if command -v rsync >/dev/null; then
     rsync -az --delete -e "ssh $SSH_OPTS" "$SRC" "${VPS_USER}@${VPS_HOST}:${DEST}"
   else
-    scp $SCP_OPTS "$SRC" "${VPS_USER}@${VPS_HOST}:${DEST}"
+    # scp: remover trailing slash do source para evitar pasta aninhada (ex: browser/browser/)
+    scp $SCP_OPTS "${SRC%/}" "${VPS_USER}@${VPS_HOST}:$(dirname $DEST)"
   fi
 }
 
