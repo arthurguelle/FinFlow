@@ -40,6 +40,20 @@ export class StorageService {
 
   private loadUser(): UserDto | null {
     const raw = localStorage.getItem(USER_KEY);
-    return raw ? JSON.parse(raw) : null;
+    if (!raw) return null;
+    try {
+      const parsed = JSON.parse(raw) as UserDto;
+      // Se o objeto salvo não tem `role` (sessão anterior ao suporte de roles),
+      // invalida a sessão para forçar novo login com dados atualizados.
+      if (!parsed.role) {
+        localStorage.removeItem(TOKEN_KEY);
+        localStorage.removeItem(REFRESH_KEY);
+        localStorage.removeItem(USER_KEY);
+        return null;
+      }
+      return parsed;
+    } catch {
+      return null;
+    }
   }
 }
