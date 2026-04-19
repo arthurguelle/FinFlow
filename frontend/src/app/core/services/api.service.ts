@@ -42,6 +42,10 @@ export class ExpenseService {
     if (password) form.append('password', password);
     return this.http.post<ApiResponse<PdfExtractResponse>>(`${this.url}/extract-pdf`, form);
   }
+
+  extractFromText(text: string): Observable<ApiResponse<PdfExtractResponse>> {
+    return this.http.post<ApiResponse<PdfExtractResponse>>(`${this.url}/extract-text`, { text });
+  }
 }
 
 @Injectable({ providedIn: 'root' })

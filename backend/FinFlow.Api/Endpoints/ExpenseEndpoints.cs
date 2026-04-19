@@ -120,6 +120,31 @@ public static class ExpenseEndpoints
                     $"Erro ao comunicar com a IA: {ex.Message}"));
             }
         }).DisableAntiforgery();
+
+        // Colar texto → IA → retorna gastos extraídos
+        group.MapPost("/extract-text", async (ExtractTextRequest req, ClaimsPrincipal user, IExpenseService service) =>
+        {
+            try
+            {
+                var userId = GetUserId(user);
+                var result = await service.ExtractFromTextAsync(userId, req.Text);
+                return Results.Ok(ApiResponse<PdfExtractResponse>.Ok(result));
+            }
+            catch (ArgumentException ex)
+            {
+                return Results.BadRequest(ApiResponse<PdfExtractResponse>.Fail(ex.Message));
+            }
+            catch (HttpRequestException ex) when ((int?)ex.StatusCode == 429 || ex.Message.Contains("429"))
+            {
+                return Results.UnprocessableEntity(ApiResponse<PdfExtractResponse>.Fail(
+                    "Limite de requisições da API de IA atingido. Aguarde alguns minutos e tente novamente."));
+            }
+            catch (HttpRequestException ex)
+            {
+                return Results.UnprocessableEntity(ApiResponse<PdfExtractResponse>.Fail(
+                    $"Erro ao comunicar com a IA: {ex.Message}"));
+            }
+        });
     }
 
     private static Guid GetUserId(ClaimsPrincipal user) =>

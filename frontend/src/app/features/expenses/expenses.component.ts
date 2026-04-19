@@ -15,6 +15,7 @@ import { MatChipsModule } from '@angular/material/chips';
 import { FormsModule } from '@angular/forms';
 import { ExpenseService, MovementService } from '../../core/services/api.service';
 import { Expense, Movement, ExtractedExpenseItem } from '../../core/models/models';
+import { PasteTextDialogComponent } from './paste-text-dialog.component';
 
 @Component({
   selector: 'app-expenses',
@@ -34,6 +35,9 @@ import { Expense, Movement, ExtractedExpenseItem } from '../../core/models/model
             <mat-icon>upload_file</mat-icon> Importar PDF
           </button>
           <input #fileInput type="file" accept=".pdf" (change)="onFileSelected($event)" hidden>
+          <button mat-stroked-button color="accent" (click)="openPasteDialog()">
+            <mat-icon>content_paste</mat-icon> Colar Texto
+          </button>
           <button mat-raised-button color="primary" (click)="openForm()">
             <mat-icon>add</mat-icon> Novo Gasto
           </button>
@@ -71,7 +75,7 @@ import { Expense, Movement, ExtractedExpenseItem } from '../../core/models/model
         <mat-card class="extract-card">
           <mat-card-content>
             <mat-spinner diameter="32"></mat-spinner>
-            <p>Analisando PDF com IA... aguarde</p>
+            <p>Analisando com IA... aguarde</p>
           </mat-card-content>
         </mat-card>
       }
@@ -79,7 +83,7 @@ import { Expense, Movement, ExtractedExpenseItem } from '../../core/models/model
       @if (extractedItems.length > 0) {
         <mat-card class="extract-results">
           <mat-card-header>
-            <mat-card-title>Gastos extraídos do PDF ({{ extractedItems.length }})</mat-card-title>
+            <mat-card-title>Gastos extraídos ({{ extractedItems.length }})</mat-card-title>
           </mat-card-header>
           <mat-card-content>
             @for (item of extractedItems; track $index) {
@@ -241,7 +245,8 @@ export class ExpensesComponent implements OnInit {
     private expenseService: ExpenseService,
     private movementService: MovementService,
     private fb: FormBuilder,
-    private snack: MatSnackBar
+    private snack: MatSnackBar,
+    private dialog: MatDialog
   ) {
     this.form = this.fb.group({
       title: ['', Validators.required],
@@ -308,6 +313,34 @@ export class ExpensesComponent implements OnInit {
 
   triggerFileInput(): void {
     document.querySelector<HTMLInputElement>('input[type=file]')?.click();
+  }
+
+  openPasteDialog(): void {
+    const ref = this.dialog.open(PasteTextDialogComponent, {
+      width: '650px',
+      maxWidth: '95vw'
+    });
+    ref.afterClosed().subscribe((text: string | undefined) => {
+      if (!text) return;
+      this.extracting = true;
+      this.extractedItems = [];
+      this.expenseService.extractFromText(text).subscribe({
+        next: r => {
+          if (r.success && r.data) {
+            this.extractedItems = r.data.items;
+            this.snack.open(`${r.data.count} gastos extraídos!`, '', { duration: 3000 });
+          } else {
+            this.snack.open(r.error ?? 'Erro ao processar texto', 'Fechar', { duration: 8000 });
+          }
+        },
+        error: err => {
+          const msg: string = err?.error?.error ?? err?.message ?? 'Erro ao processar texto.';
+          this.snack.open(msg, 'Fechar', { duration: 10000 });
+          this.extracting = false;
+        },
+        complete: () => this.extracting = false
+      });
+    });
   }
 
   onFileSelected(event: Event): void {

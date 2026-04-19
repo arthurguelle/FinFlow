@@ -17,6 +17,7 @@ public interface IExpenseService
     Task DeleteAsync(Guid id, Guid userId);
     Task<SummaryDto> GetSummaryAsync(Guid userId, int? year, int? month);
     Task<PdfExtractResponse> ExtractFromPdfAsync(Guid userId, IFormFile file, string? password = null);
+    Task<PdfExtractResponse> ExtractFromTextAsync(Guid userId, string text);
 }
 
 public class ExpenseService(
@@ -158,6 +159,16 @@ public class ExpenseService(
         {
             File.Delete(filePath);
         }
+    }
+
+    public async Task<PdfExtractResponse> ExtractFromTextAsync(Guid userId, string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            throw new ArgumentException("O texto não pode estar vazio.");
+
+        var processedText = PdfTextPreprocessor.Preprocess(text);
+        var items = await ai.ExtractExpensesFromTextAsync(processedText);
+        return new PdfExtractResponse(items, items.Count());
     }
 
     private static Task<string> ExtractPdfTextAsync(string filePath, string? password)
