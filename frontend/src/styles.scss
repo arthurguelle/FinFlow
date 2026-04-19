@@ -46,6 +46,12 @@ body {
 
 .mat-mdc-raised-button.mat-primary {
   background: var(--color-primary) !important;
+  color: #ffffff !important;
+}
+
+.mat-mdc-raised-button.mat-primary .mat-icon,
+.mat-mdc-raised-button.mat-primary .mdc-button__label {
+  color: #ffffff !important;
 }
 
 mat-card {
