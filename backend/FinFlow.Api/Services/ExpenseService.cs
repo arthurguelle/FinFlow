@@ -1,4 +1,3 @@
-using System.ComponentModel;
 using Microsoft.EntityFrameworkCore;
 using UglyToad.PdfPig;
 using UglyToad.PdfPig.Content;
@@ -23,9 +22,7 @@ public interface IExpenseService
 public class ExpenseService(
     AppDbContext db,
     IAiExtractor ai,
-    IWebHostEnvironment env,
-    IConfiguration config,
-    ILogger<ExpenseService> logger) : IExpenseService
+    IWebHostEnvironment env) : IExpenseService
 {
     public async Task<IEnumerable<ExpenseDto>> GetAllAsync(Guid userId, int? year, int? month)
     {
@@ -163,36 +160,8 @@ public class ExpenseService(
         }
     }
 
-    /// <summary>
-    /// Seleciona o engine de extração conforme PDF:ExtractorEngine (python|legacy).
-    /// Fallback automático para legacy se Python não estiver disponível.
-    /// </summary>
-    private async Task<string> ExtractPdfTextAsync(string filePath, string? password)
-    {
-        var engine = (config["PDF:ExtractorEngine"] ?? "legacy").ToLowerInvariant();
-
-        if (engine == "python")
-        {
-            try
-            {
-                return await PythonPdfExtractor.ExtractAsync(filePath, password, config, logger);
-            }
-            catch (Win32Exception ex)
-            {
-                logger.LogWarning(ex,
-                    "Python não encontrado. Caindo para engine legacy (PdfPig). " +
-                    "Configure PDF:ExtractorEngine=legacy para suprimir este aviso.");
-            }
-            catch (FileNotFoundException ex)
-            {
-                logger.LogWarning(ex,
-                    "Script Python não localizado. Caindo para engine legacy (PdfPig).");
-            }
-            // Se Python falhou por motivo de infra, usamos o legacy como fallback
-        }
-
-        return await ExtractTextFromPdfAsync(filePath, password);
-    }
+    private static Task<string> ExtractPdfTextAsync(string filePath, string? password)
+        => ExtractTextFromPdfAsync(filePath, password);
 
     private static Task<string> ExtractTextFromPdfAsync(string filePath, string? password = null)
     {

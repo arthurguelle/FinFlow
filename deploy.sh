@@ -115,9 +115,6 @@ fi
 _send "backend/publish/"        "${VPS_DIR}/backend/publish/"
 _send "backend/Dockerfile.vps"  "${VPS_DIR}/backend/Dockerfile.vps"
 
-# Backend: pdf_extractor (Python)
-_send "backend/pdf_extractor/"  "${VPS_DIR}/backend/pdf_extractor/"
-
 # Scripts SQL
 if [ "$BACKEND_ONLY" = false ]; then
   _send "database/" "${VPS_DIR}/database/"
