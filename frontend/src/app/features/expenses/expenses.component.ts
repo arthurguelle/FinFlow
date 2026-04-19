@@ -332,11 +332,20 @@ export class ExpensesComponent implements OnInit {
       },
       error: (err) => {
         const msg: string = err?.error?.error ?? err?.message ?? 'Erro ao processar PDF.';
-        const isPasswordError = msg.toLowerCase().includes('senha') || msg.toLowerCase().includes('protegido');
-        if (isPasswordError && !password) {
-          // Mostra campo de senha
+        const isPasswordKeyword = msg.toLowerCase().includes('senha') || msg.toLowerCase().includes('protegido');
+        // Erros de IA têm mensagens distintas — não mostrar campo de senha nesses casos
+        const isAiError = msg.toLowerCase().includes('limite de req') || msg.toLowerCase().includes('erro ao comunicar');
+        // Em qualquer 422 na primeira tentativa (sem senha), oferencemos o campo de senha,
+        // pois o PDF pode estar protegido mas o backend não conseguiu detectar corretamente.
+        const shouldOfferPassword = !password && err?.status === 422 && !isAiError;
+
+        if (isPasswordKeyword || shouldOfferPassword) {
           this.pendingPasswordFile = file;
           this.pdfPasswordCtrl.reset();
+          if (!isPasswordKeyword) {
+            // Exibe o erro original, mas também mostra o campo de senha como alternativa
+            this.snack.open(msg + ' Se o PDF tiver senha, informe-a abaixo.', 'OK', { duration: 8000 });
+          }
         } else {
           this.snack.open(msg, 'Fechar', { duration: 10000 });
         }

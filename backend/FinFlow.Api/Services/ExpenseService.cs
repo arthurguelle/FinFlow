@@ -205,20 +205,13 @@ public class ExpenseService(
 
             doc = PdfDocument.Open(filePath, options);
         }
-        catch (PdfDocumentEncryptedException)
+        catch (Exception ex) when (IsEncryptionException(ex))
         {
             if (!string.IsNullOrWhiteSpace(password))
                 throw new InvalidOperationException("Senha incorreta. Verifique a senha do PDF e tente novamente.");
 
             throw new InvalidOperationException(
                 "Este PDF está protegido por senha. Clique em 'Importar PDF' e informe a senha do documento.");
-        }
-        catch (Exception ex) when (ex.Message.Contains("encrypt", StringComparison.OrdinalIgnoreCase)
-                                || ex.Message.Contains("password", StringComparison.OrdinalIgnoreCase)
-                                || ex.Message.Contains("secured", StringComparison.OrdinalIgnoreCase))
-        {
-            throw new InvalidOperationException(
-                "Este PDF está protegido. Informe a senha ou remova a proteção antes de importar.");
         }
 
         try
@@ -259,6 +252,29 @@ public class ExpenseService(
         {
             doc.Dispose();
         }
+    }
+
+    /// <summary>
+    /// Detecta exceções do PdfPig (incluindo versões customizadas) relacionadas a criptografia/senha.
+    /// Verifica tanto o tipo da exceção quanto a mensagem para suportar versões que renomearam exceções.
+    /// </summary>
+    private static bool IsEncryptionException(Exception ex)
+    {
+        if (ex is PdfDocumentEncryptedException) return true;
+
+        var typeName = ex.GetType().Name + (ex.GetType().FullName ?? string.Empty);
+        if (typeName.Contains("Encrypt", StringComparison.OrdinalIgnoreCase) ||
+            typeName.Contains("Password", StringComparison.OrdinalIgnoreCase) ||
+            typeName.Contains("Decryp", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        var msg = ex.Message;
+        return msg.Contains("encrypt", StringComparison.OrdinalIgnoreCase)
+            || msg.Contains("password", StringComparison.OrdinalIgnoreCase)
+            || msg.Contains("secured", StringComparison.OrdinalIgnoreCase)
+            || msg.Contains("decrypt", StringComparison.OrdinalIgnoreCase)
+            || msg.Contains("senha", StringComparison.OrdinalIgnoreCase)
+            || msg.Contains("proteg", StringComparison.OrdinalIgnoreCase);
     }
 
     private static ExpenseDto ToDto(Expense e) =>
