@@ -11,7 +11,7 @@ curl -sk -w "\nHTTP:%{http_code}\n" https://localhost/api/auth/login \
 echo ""
 echo "=== CORS check (origin IP HTTPS) ==="
 curl -sk -I -X OPTIONS "https://localhost/api/auth/login" \
-  -H "Origin: https://204.216.129.57" \
+  -H "Origin: https://204.216.138.73" \
   -H "Access-Control-Request-Method: POST" \
   -H "Access-Control-Request-Headers: Content-Type" 2>&1 | grep -iE "access-control|http/|200|204"
 echo ""

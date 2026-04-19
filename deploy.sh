@@ -14,7 +14,7 @@ BACKEND_ONLY=false
 
 # ── Configurações da VPS (edite aqui) ────────────────────────────────────────
 VPS_USER="ubuntu"
-VPS_HOST="204.216.129.57"    # ← OBRIGATÓRIO: preencha o IP ou domínio da VPS
+VPS_HOST="204.216.138.73"    # ← OBRIGATÓRIO: preencha o IP ou domínio da VPS
 VPS_PORT="22"
 VPS_DIR="/opt/finflow"
 SSH_KEY="infra/SSH/ssh-key-2026-04-11.key"  # chave SSH do projeto
