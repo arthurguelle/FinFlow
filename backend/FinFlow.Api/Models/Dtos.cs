@@ -78,3 +78,4 @@ public record MovementSummaryDto(
 // ── PDF Upload / Gemini ───────────────────────────────────────────────────────
 public record ExtractedExpenseItem(string Title, decimal Amount, DateOnly Date);
 public record PdfExtractResponse(IEnumerable<ExtractedExpenseItem> Items, int Count);
+public record ExtractTextRequest(string Text);

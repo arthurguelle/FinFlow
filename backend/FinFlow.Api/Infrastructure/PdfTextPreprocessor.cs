@@ -9,7 +9,6 @@ namespace FinFlow.Api.Infrastructure;
 /// </summary>
 public static partial class PdfTextPreprocessor
 {
-    private const int MaxChars = 4000;
 
     [GeneratedRegex(@" {2,}")]
     private static partial Regex MultipleSpaces();
@@ -54,6 +53,6 @@ public static partial class PdfTextPreprocessor
         }
 
         var filtered = result.ToString();
-        return filtered.Length > MaxChars ? filtered[..MaxChars] : filtered;
+        return filtered;
     }
 }
