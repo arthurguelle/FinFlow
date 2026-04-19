@@ -32,7 +32,7 @@ log()  { echo -e "${GREEN}[✔]${NC} $1"; }
 warn() { echo -e "${YELLOW}[!]${NC} $1"; }
 fail() { echo -e "${RED}[✗]${NC} $1"; exit 1; }
 
-SSH_OPTS="-p ${VPS_PORT}"
+SSH_OPTS="-p ${VPS_PORT} -o StrictHostKeyChecking=no"
 [ -n "$SSH_KEY" ] && SSH_OPTS="$SSH_OPTS -i $SSH_KEY"
 
 echo ""
