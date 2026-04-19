@@ -34,8 +34,9 @@ public class OpenAiCompatibleExtractor(
         3. "date": formato YYYY-MM-DD. Se a linha tiver DD/MM ou DD/MM/AA, converta. Se não houver data, use a data de vencimento da fatura.
         4. NO texto de fatura, cada linha de lançamento tem formato típico: DATA ESTABELECIMENTO [PARCELA] VALOR
         5. INCLUA todos os lançamentos: compras, parcelamentos, débitos
-        6. EXCLUA: total da fatura, pagamento mínimo, saldo anterior, limite, IOF, encargos, juros, multas
-        7. Se receber texto parcial, extraia apenas os lançamentos presentes no trecho recebido.
+        6. EXCLUA: total da fatura, pagamento mínimo, saldo anterior, limite, IOF, encargos, juros, multas, créditos e estornos
+        7. EXCLUA qualquer linha cujo valor termina com hífen/traço (ex: "R$ 13,33-" ou "13,33-") — esses são créditos/descontos, não gastos
+        8. Se receber texto parcial, extraia apenas os lançamentos presentes no trecho recebido.
         """;
 
     public async Task<IEnumerable<ExtractedExpenseItem>> ExtractExpensesFromTextAsync(string pdfText)

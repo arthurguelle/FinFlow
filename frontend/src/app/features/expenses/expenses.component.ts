@@ -12,6 +12,7 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatChipsModule } from '@angular/material/chips';
+import { MatDividerModule } from '@angular/material/divider';
 import { FormsModule } from '@angular/forms';
 import { ExpenseService, MovementService } from '../../core/services/api.service';
 import { Expense, Movement, ExtractedExpenseItem } from '../../core/models/models';
@@ -24,7 +25,7 @@ import { PasteTextDialogComponent } from './paste-text-dialog.component';
     CommonModule, ReactiveFormsModule, FormsModule, CurrencyPipe,
     MatCardModule, MatTableModule, MatButtonModule, MatIconModule,
     MatDialogModule, MatFormFieldModule, MatInputModule, MatSelectModule,
-    MatSnackBarModule, MatProgressSpinnerModule, MatChipsModule
+    MatSnackBarModule, MatProgressSpinnerModule, MatChipsModule, MatDividerModule
   ],
   template: `
     <div class="expenses-page">
@@ -43,6 +44,75 @@ import { PasteTextDialogComponent } from './paste-text-dialog.component';
           </button>
         </div>
       </div>
+
+      <!-- Barra de busca + filtros -->
+      <div class="search-filter-bar">
+        <mat-form-field appearance="outline" class="search-field">
+          <mat-label>Buscar gastos</mat-label>
+          <mat-icon matPrefix>search</mat-icon>
+          <input matInput [(ngModel)]="searchText" placeholder="Título do gasto...">
+          @if (searchText) {
+            <button mat-icon-button matSuffix (click)="searchText = ''" type="button">
+              <mat-icon>close</mat-icon>
+            </button>
+          }
+        </mat-form-field>
+        <button mat-stroked-button (click)="showFilters = !showFilters" [color]="activeFilterCount > 0 ? 'primary' : undefined">
+          <mat-icon>tune</mat-icon>
+          Filtros
+          @if (activeFilterCount > 0) {
+            <span class="filter-badge">{{ activeFilterCount }}</span>
+          }
+        </button>
+        @if (activeFilterCount > 0 || searchText) {
+          <button mat-button color="warn" (click)="clearFilters()">
+            <mat-icon>filter_alt_off</mat-icon> Limpar
+          </button>
+        }
+      </div>
+
+      @if (showFilters) {
+        <mat-card class="filter-panel">
+          <mat-card-content>
+            <div class="filter-grid">
+              <mat-form-field appearance="outline">
+                <mat-label>Data início</mat-label>
+                <input matInput type="date" [(ngModel)]="filterDateStart">
+              </mat-form-field>
+              <mat-form-field appearance="outline">
+                <mat-label>Data fim</mat-label>
+                <input matInput type="date" [(ngModel)]="filterDateEnd">
+              </mat-form-field>
+              <mat-form-field appearance="outline">
+                <mat-label>Categoria</mat-label>
+                <mat-select [(ngModel)]="filterMovementId">
+                  <mat-option [value]="null">Todas</mat-option>
+                  <mat-option value="__none__">Sem categoria</mat-option>
+                  @for (m of movements; track m.id) {
+                    <mat-option [value]="m.id">{{ m.title }}</mat-option>
+                  }
+                </mat-select>
+              </mat-form-field>
+              <mat-form-field appearance="outline">
+                <mat-label>Tipo</mat-label>
+                <mat-select [(ngModel)]="filterType">
+                  <mat-option value="all">Todos</mat-option>
+                  <mat-option value="receita">Receita</mat-option>
+                  <mat-option value="divida">Dívida</mat-option>
+                </mat-select>
+              </mat-form-field>
+              <mat-form-field appearance="outline">
+                <mat-label>Valor mínimo (R$)</mat-label>
+                <input matInput type="number" step="0.01" min="0" [(ngModel)]="filterAmountMin">
+              </mat-form-field>
+              <mat-form-field appearance="outline">
+                <mat-label>Valor máximo (R$)</mat-label>
+                <input matInput type="number" step="0.01" min="0" [(ngModel)]="filterAmountMax">
+              </mat-form-field>
+            </div>
+          </mat-card-content>
+        </mat-card>
+      }
 
       @if (pendingPasswordFile) {
         <mat-card class="password-card">
@@ -152,8 +222,21 @@ import { PasteTextDialogComponent } from './paste-text-dialog.component';
                 <mat-icon>receipt_long</mat-icon>
                 <p>Nenhum gasto registrado. Importe um PDF ou adicione manualmente.</p>
               </div>
+            } @else if (filteredExpenses.length === 0) {
+              <div class="empty-state">
+                <mat-icon>search_off</mat-icon>
+                <p>Nenhum gasto encontrado com os filtros aplicados.</p>
+                <button mat-stroked-button (click)="clearFilters()">Limpar filtros</button>
+              </div>
             } @else {
-              <table mat-table [dataSource]="expenses" class="full-width">
+              <div class="table-meta">
+                <span class="result-count">{{ filteredExpenses.length }} gasto(s)
+                  @if (filteredExpenses.length !== expenses.length) {
+                    <span class="total-hint"> de {{ expenses.length }} total</span>
+                  }
+                </span>
+              </div>
+              <table mat-table [dataSource]="filteredExpenses" class="full-width">
                 <ng-container matColumnDef="date">
                   <th mat-header-cell *matHeaderCellDef>Data</th>
                   <td mat-cell *matCellDef="let e">{{ e.expenseDate }}</td>
@@ -202,9 +285,17 @@ import { PasteTextDialogComponent } from './paste-text-dialog.component';
   `,
   styles: [`
     .expenses-page { padding: 1.5rem; max-width: 1200px; margin: 0 auto; }
-    .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
+    .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
     .page-header h2 { margin: 0; color: var(--color-primary); }
     .actions { display: flex; gap: 0.75rem; }
+    .search-filter-bar { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem; flex-wrap: wrap; }
+    .search-field { flex: 1; min-width: 220px; }
+    .filter-badge { display: inline-flex; align-items: center; justify-content: center; background: var(--color-primary, #4A6FA5); color: #fff; border-radius: 50%; width: 18px; height: 18px; font-size: 11px; font-weight: 700; margin-left: 4px; vertical-align: middle; }
+    .filter-panel { margin-bottom: 1rem; border-left: 3px solid var(--color-primary, #4A6FA5); }
+    .filter-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 0 1rem; }
+    .table-meta { display: flex; align-items: center; padding: 0.25rem 0 0.5rem; }
+    .result-count { font-size: 0.85rem; color: var(--color-text-secondary, #6C757D); }
+    .total-hint { opacity: 0.7; }
     .loading { display: flex; justify-content: center; padding: 3rem; }
     .full-width { width: 100%; }
     .extract-card mat-card-content, .extract-results mat-card-content { display: flex; flex-direction: column; gap: 1rem; }
@@ -238,6 +329,51 @@ export class ExpensesComponent implements OnInit {
   pendingPasswordFile: File | null = null;
   pdfPasswordCtrl = new FormControl('');
   showPassword = false;
+
+  // Busca e filtros
+  searchText = '';
+  filterDateStart = '';
+  filterDateEnd = '';
+  filterMovementId: string | null = null;
+  filterType: 'all' | 'receita' | 'divida' = 'all';
+  filterAmountMin: number | null = null;
+  filterAmountMax: number | null = null;
+  showFilters = false;
+
+  get filteredExpenses(): Expense[] {
+    return this.expenses.filter(e => {
+      if (this.searchText && !e.title.toLowerCase().includes(this.searchText.toLowerCase())) return false;
+      if (this.filterDateStart && e.expenseDate < this.filterDateStart) return false;
+      if (this.filterDateEnd && e.expenseDate > this.filterDateEnd) return false;
+      if (this.filterMovementId === '__none__' && e.movementId) return false;
+      if (this.filterMovementId && this.filterMovementId !== '__none__' && e.movementId !== this.filterMovementId) return false;
+      if (this.filterType !== 'all' && e.movementType !== this.filterType) return false;
+      if (this.filterAmountMin !== null && e.amount < this.filterAmountMin) return false;
+      if (this.filterAmountMax !== null && e.amount > this.filterAmountMax) return false;
+      return true;
+    });
+  }
+
+  get activeFilterCount(): number {
+    let count = 0;
+    if (this.filterDateStart) count++;
+    if (this.filterDateEnd) count++;
+    if (this.filterMovementId) count++;
+    if (this.filterType !== 'all') count++;
+    if (this.filterAmountMin !== null) count++;
+    if (this.filterAmountMax !== null) count++;
+    return count;
+  }
+
+  clearFilters(): void {
+    this.searchText = '';
+    this.filterDateStart = '';
+    this.filterDateEnd = '';
+    this.filterMovementId = null;
+    this.filterType = 'all';
+    this.filterAmountMin = null;
+    this.filterAmountMax = null;
+  }
 
   form: ReturnType<FormBuilder['group']>;
 
