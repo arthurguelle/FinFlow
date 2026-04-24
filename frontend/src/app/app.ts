@@ -21,6 +21,9 @@ import { AuthService } from "./core/services/auth.service";
         <span class="logo-text">
           <mat-icon>account_balance_wallet</mat-icon>
           FinFlow
+          @if (user?.role === 'demo') {
+            <span class="demo-badge" title="Importação de PDF desativada nesta conta">Demo</span>
+          }
         </span>
         <nav class="nav-links">
           <a mat-button routerLink="/dashboard" routerLinkActive="active-link">Dashboard</a>
@@ -54,6 +57,17 @@ import { AuthService } from "./core/services/auth.service";
     .spacer { flex: 1; }
     main.with-toolbar { min-height: calc(100vh - 64px); }
     .user-info { padding: 0.5rem 1rem; color: #666; font-size: 0.875rem; border-bottom: 1px solid #eee; }
+    .demo-badge {
+      margin-left: 0.5rem;
+      font-size: 0.65rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      padding: 0.2rem 0.45rem;
+      border-radius: 4px;
+      background: rgba(255,255,255,0.22);
+      border: 1px solid rgba(255,255,255,0.35);
+    }
   `]
 })
 export class App {

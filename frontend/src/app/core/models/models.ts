@@ -15,14 +15,14 @@ export interface UserDto {
   id: string;
   name: string;
   email: string;
-  role: 'admin' | 'user';
+  role: 'admin' | 'user' | 'demo';
 }
 
 export interface AdminUser {
   id: string;
   name: string;
   email: string;
-  role: 'admin' | 'user';
+  role: 'admin' | 'user' | 'demo';
   isActive: boolean;
   createdAt: string;
 }

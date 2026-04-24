@@ -86,6 +86,12 @@ public static class ExpenseEndpoints
         // Campo opcional "password" para PDFs protegidos
         group.MapPost("/extract-pdf", async (HttpRequest req, ClaimsPrincipal user, IExpenseService service) =>
         {
+            if (user.IsInRole("demo"))
+                return Results.Json(
+                    ApiResponse<PdfExtractResponse>.Fail(
+                        "Conta demo não permite importação de PDF. Use Colar texto ou cadastro manual."),
+                    statusCode: StatusCodes.Status403Forbidden);
+
             try
             {
                 if (!req.HasFormContentType)

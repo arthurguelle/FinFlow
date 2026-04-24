@@ -30,6 +30,8 @@ public class AdminService(AppDbContext db) : IAdminService
             throw new InvalidOperationException("E-mail já cadastrado.");
 
         var role = request.Role is "admin" or "user" ? request.Role : "user";
+        if (request.Role == "demo")
+            throw new InvalidOperationException("Perfil demo não pode ser atribuído por aqui.");
 
         var user = new User
         {
@@ -57,7 +59,8 @@ public class AdminService(AppDbContext db) : IAdminService
 
         user.Name = request.Name.Trim();
         user.Email = request.Email.ToLower().Trim();
-        user.Role = request.Role is "admin" or "user" ? request.Role : "user";
+        if (user.Role != "demo")
+            user.Role = request.Role is "admin" or "user" ? request.Role : "user";
         user.IsActive = request.IsActive;
         user.UpdatedAt = DateTime.UtcNow;
 

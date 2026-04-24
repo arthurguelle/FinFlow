@@ -72,8 +72,12 @@ import { StorageService } from '../../core/services/storage.service';
               <mat-form-field appearance="outline">
                 <mat-label>Perfil</mat-label>
                 <mat-select formControlName="role">
-                  <mat-option value="user">Usuário</mat-option>
-                  <mat-option value="admin">Administrador</mat-option>
+                  @if (editing?.role === 'demo') {
+                    <mat-option value="demo">Demo (visitante público)</mat-option>
+                  } @else {
+                    <mat-option value="user">Usuário</mat-option>
+                    <mat-option value="admin">Administrador</mat-option>
+                  }
                 </mat-select>
               </mat-form-field>
 
@@ -173,8 +177,8 @@ import { StorageService } from '../../core/services/storage.service';
                   <th mat-header-cell *matHeaderCellDef>Perfil</th>
                   <td mat-cell *matCellDef="let u">
                     <mat-chip [class]="u.role">
-                      <mat-icon>{{ u.role === 'admin' ? 'admin_panel_settings' : 'person' }}</mat-icon>
-                      {{ u.role === 'admin' ? 'Admin' : 'Usuário' }}
+                      <mat-icon>{{ roleIcon(u.role) }}</mat-icon>
+                      {{ roleLabel(u.role) }}
                     </mat-chip>
                   </td>
                 </ng-container>
@@ -241,6 +245,7 @@ import { StorageService } from '../../core/services/storage.service';
     .you-chip { font-size: 11px !important; height: 20px !important; }
     mat-chip.admin { background: #e8eaf6 !important; color: #3949ab !important; }
     mat-chip.user { background: #f5f5f5 !important; color: #555 !important; }
+    mat-chip.demo { background: #e0f2f1 !important; color: #00695c !important; }
     mat-chip.active { background: #e8f5e9 !important; color: #2e7d32 !important; }
     mat-chip.inactive { background: #ffebee !important; color: #c62828 !important; }
     .pwd-form { display: flex; flex-direction: column; gap: 0.75rem; }
@@ -278,6 +283,18 @@ export class UsersComponent implements OnInit {
       password: ['', [Validators.minLength(6)]],
       isActive: [true]
     });
+  }
+
+  roleIcon(role: string): string {
+    if (role === 'admin') return 'admin_panel_settings';
+    if (role === 'demo') return 'travel_explore';
+    return 'person';
+  }
+
+  roleLabel(role: string): string {
+    if (role === 'admin') return 'Admin';
+    if (role === 'demo') return 'Demo';
+    return 'Usuário';
   }
 
   ngOnInit(): void {

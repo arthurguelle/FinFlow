@@ -15,11 +15,13 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatDividerModule } from '@angular/material/divider';
 import { MatCheckboxModule } from '@angular/material/checkbox';
+import { MatTooltipModule } from '@angular/material/tooltip';
 import { FormsModule } from '@angular/forms';
 import { SelectionModel } from '@angular/cdk/collections';
 import { ExpenseService, MovementService } from '../../core/services/api.service';
 import { Expense, Movement, ExtractedExpenseItem } from '../../core/models/models';
 import { PasteTextDialogComponent } from './paste-text-dialog.component';
+import { StorageService } from '../../core/services/storage.service';
 
 @Component({
   selector: 'app-expenses',
@@ -29,16 +31,21 @@ import { PasteTextDialogComponent } from './paste-text-dialog.component';
     MatCardModule, MatTableModule, MatButtonModule, MatIconModule,
     MatDialogModule, MatFormFieldModule, MatInputModule, MatSelectModule,
     MatSnackBarModule, MatProgressSpinnerModule, MatProgressBarModule,
-    MatChipsModule, MatDividerModule, MatCheckboxModule
+    MatChipsModule, MatDividerModule, MatCheckboxModule, MatTooltipModule
   ],
   template: `
     <div class="expenses-page">
       <div class="page-header">
         <h2>Gastos</h2>
         <div class="actions">
-          <button mat-stroked-button color="primary" (click)="triggerFileInput()">
-            <mat-icon>upload_file</mat-icon> Importar PDF
-          </button>
+          <span
+            class="pdf-btn-wrap"
+            [matTooltip]="isDemo ? 'Na conta demo a importação de PDF está desativada. Use Colar texto ou Novo gasto.' : ''"
+            [matTooltipDisabled]="!isDemo">
+            <button mat-stroked-button color="primary" type="button" (click)="triggerFileInput()" [disabled]="isDemo">
+              <mat-icon>upload_file</mat-icon> Importar PDF
+            </button>
+          </span>
           <input #fileInput type="file" accept=".pdf" (change)="onFileSelected($event)" hidden>
           <button mat-stroked-button color="accent" (click)="openPasteDialog()">
             <mat-icon>content_paste</mat-icon> Colar Texto
@@ -300,7 +307,7 @@ import { PasteTextDialogComponent } from './paste-text-dialog.component';
             @if (expenses.length === 0) {
               <div class="empty-state">
                 <mat-icon>receipt_long</mat-icon>
-                <p>Nenhum gasto registrado. Importe um PDF ou adicione manualmente.</p>
+                <p>Nenhum gasto registrado. {{ isDemo ? 'Adicione manualmente ou use Colar texto.' : 'Importe um PDF, use Colar texto ou adicione manualmente.' }}</p>
               </div>
             } @else if (filteredExpenses.length === 0) {
               <div class="empty-state">
@@ -384,6 +391,7 @@ import { PasteTextDialogComponent } from './paste-text-dialog.component';
     .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
     .page-header h2 { margin: 0; color: var(--color-primary); }
     .actions { display: flex; gap: 0.75rem; }
+    .pdf-btn-wrap { display: inline-block; }
     .search-filter-bar { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem; flex-wrap: wrap; }
     .search-field { flex: 1; min-width: 220px; }
     .filter-badge { display: inline-flex; align-items: center; justify-content: center; background: var(--color-primary, #4A6FA5); color: #fff; border-radius: 50%; width: 18px; height: 18px; font-size: 11px; font-weight: 700; margin-left: 4px; vertical-align: middle; }
@@ -453,6 +461,10 @@ export class ExpensesComponent implements OnInit {
 
   get currentReviewExpense(): Expense | null {
     return this.reviewList[this.reviewIndex] ?? null;
+  }
+
+  get isDemo(): boolean {
+    return this.storage.user()?.role === 'demo';
   }
 
   isAllSelected(): boolean {
@@ -616,7 +628,8 @@ export class ExpensesComponent implements OnInit {
     private movementService: MovementService,
     private fb: FormBuilder,
     private snack: MatSnackBar,
-    private dialog: MatDialog
+    private dialog: MatDialog,
+    private storage: StorageService
   ) {
     this.form = this.fb.group({
       title: ['', Validators.required],
@@ -682,6 +695,10 @@ export class ExpensesComponent implements OnInit {
   }
 
   triggerFileInput(): void {
+    if (this.isDemo) {
+      this.snack.open('Importação de PDF não está disponível na conta demo.', 'OK', { duration: 4000 });
+      return;
+    }
     document.querySelector<HTMLInputElement>('input[type=file]')?.click();
   }
 
@@ -715,7 +732,8 @@ export class ExpensesComponent implements OnInit {
 
   onFileSelected(event: Event): void {
     const file = (event.target as HTMLInputElement).files?.[0];
-    if (!file) return;
+    (event.target as HTMLInputElement).value = '';
+    if (!file || this.isDemo) return;
     this.uploadPdf(file);
   }
 

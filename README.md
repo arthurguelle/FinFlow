@@ -10,7 +10,7 @@ O FinFlow é uma aplicação web full-stack que permite ao usuário importar fat
 
 - 🔐 **Autenticação JWT** com refresh token e controle de sessão
 - 👥 **Multi-usuário** com isolamento total de dados por usuário
-- 🛡️ **Controle de acesso por roles** (`admin` / `user`) — admins gerenciam todos os usuários
+- 🛡️ **Controle de acesso por roles** (`admin` / `user` / `demo`) — admins gerenciam usuários; conta **demo** para visitantes (PDF desativado)
 - 📄 **Upload de PDF** de faturas e boletos com extração automática de itens por IA
 - ✏️ **Revisão manual** dos gastos extraídos antes de salvar
 - 🏷️ **Categorias** (Movimentos) com tipo receita ou dívida
@@ -133,6 +133,8 @@ docker compose up -d
 docker exec -i finflow_postgres psql -U finflow -d finflow < ../database/001_create_tables.sql
 docker exec -i finflow_postgres psql -U finflow -d finflow < ../database/002_jwt_tables.sql
 docker exec -i finflow_postgres psql -U finflow -d finflow < ../database/003_seed.sql
+docker exec -i finflow_postgres psql -U finflow -d finflow < ../database/004_add_user_role.sql
+docker exec -i finflow_postgres psql -U finflow -d finflow < ../database/005_demo_user.sql
 ```
 
 ### 4. Acessar
@@ -144,6 +146,8 @@ docker exec -i finflow_postgres psql -U finflow -d finflow < ../database/003_see
 | Health check | http://localhost/api/health |
 
 **Credenciais padrão (seed):** `admin@finflow.dev` / `Admin@123`
+
+**Conta demo (portfólio / visitante):** `demo@finflow.dev` / `FinFlowDemo1!` — mesmos dados que o botão “Experimentar conta demo” no login. A importação de **PDF** está bloqueada (UI + API); **colar texto**, CRUD de gastos/categorias e dashboard funcionam normalmente.
 
 ---
 

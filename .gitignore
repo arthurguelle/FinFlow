@@ -93,3 +93,6 @@ infra/SSH/
 *.crt
 *.cer
 .ssh/
+
+# ── Ferramentas temporárias locais ─────────────────────────
+tools/bcround/
