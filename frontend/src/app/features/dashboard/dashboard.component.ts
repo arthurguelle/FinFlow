@@ -8,8 +8,10 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSelectModule } from '@angular/material/select';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { FormsModule } from '@angular/forms';
-import { ExpenseService } from '../../core/services/api.service';
+import { forkJoin } from 'rxjs';
+import { ExpenseService, MovementService } from '../../core/services/api.service';
 import { StorageService } from '../../core/services/storage.service';
+import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { Summary } from '../../core/models/models';
 
 @Component({
@@ -18,7 +20,8 @@ import { Summary } from '../../core/models/models';
   imports: [
     CommonModule, RouterModule, FormsModule, CurrencyPipe,
     MatCardModule, MatIconModule, MatButtonModule,
-    MatProgressSpinnerModule, MatSelectModule, MatFormFieldModule
+    MatProgressSpinnerModule, MatSelectModule, MatFormFieldModule,
+    MatSnackBarModule
   ],
   template: `
     <div class="dashboard">
@@ -83,6 +86,38 @@ import { Summary } from '../../core/models/models';
           </mat-card>
         </div>
 
+        @if (!templateDone && summary.totalReceitas === 0 && summary.totalDividas === 0 && summary.byMovement.length === 0) {
+          <div class="onboarding-panel">
+            <div class="onboarding-header">
+              <mat-icon class="wave-icon">waving_hand</mat-icon>
+              <div class="onboarding-title">
+                <strong>Bem-vindo ao FinFlow, {{ (user?.name ?? '').split(' ')[0] }}!</strong>
+                <p>Seu painel está vazio. Escolha um modelo para criar categorias e começar rapidamente.</p>
+              </div>
+              <button mat-icon-button class="onboarding-dismiss" (click)="templateDone = true" aria-label="Dispensar">
+                <mat-icon>close</mat-icon>
+              </button>
+            </div>
+            <div class="template-grid">
+              @for (t of onboardingTemplates; track t.name) {
+                <button class="template-card" [class.tpl-loading]="templateLoading === t.name" [disabled]="!!templateLoading" (click)="applyTemplate(t)">
+                  <div class="tpl-icon">
+                    @if (templateLoading === t.name) {
+                      <mat-spinner diameter="24"></mat-spinner>
+                    } @else {
+                      <mat-icon>{{ t.icon }}</mat-icon>
+                    }
+                  </div>
+                  <div class="tpl-info">
+                    <strong>{{ t.name }}</strong>
+                    <span>{{ t.desc }}</span>
+                  </div>
+                </button>
+              }
+            </div>
+          </div>
+        }
+
         @if (summary.byMovement.length > 0) {
           <mat-card class="movements-breakdown">
             <mat-card-header>
@@ -144,6 +179,46 @@ import { Summary } from '../../core/models/models';
     strong.divida { color: #c62828; }
     .quick-actions { display: flex; gap: 1rem; flex-wrap: wrap; }
     .quick-actions button { display: flex; align-items: center; gap: 0.5rem; }
+    /* Onboarding templates */
+    .onboarding-panel {
+      border: 1px dashed var(--color-border);
+      border-radius: 12px;
+      padding: 1.25rem 1.5rem;
+      margin-bottom: 1.5rem;
+      background: var(--color-background);
+    }
+    .onboarding-header {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.75rem;
+      margin-bottom: 1rem;
+    }
+    .wave-icon { font-size: 2rem; height: 2rem; width: 2rem; color: var(--color-primary); flex-shrink: 0; }
+    .onboarding-title { flex: 1; }
+    .onboarding-title strong { font-size: 1rem; color: var(--color-text-primary); }
+    .onboarding-title p { margin: 0.2rem 0 0; font-size: 0.85rem; color: var(--color-text-secondary); }
+    .onboarding-dismiss { margin-left: auto; flex-shrink: 0; color: var(--color-text-secondary); }
+    .template-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 0.75rem; }
+    .template-card {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.85rem 1rem;
+      border: 1px solid var(--color-border);
+      border-radius: 10px;
+      background: #fff;
+      cursor: pointer;
+      transition: border-color 0.15s, box-shadow 0.15s;
+      text-align: left;
+      width: 100%;
+    }
+    .template-card:hover:not([disabled]) { border-color: var(--color-primary); box-shadow: 0 2px 10px rgba(74,111,165,0.1); }
+    .template-card[disabled] { opacity: 0.65; cursor: default; }
+    .template-card.tpl-loading { border-color: var(--color-primary); }
+    .tpl-icon { flex-shrink: 0; display: flex; align-items: center; justify-content: center; width: 28px; }
+    .tpl-icon mat-icon { color: var(--color-primary); }
+    .tpl-info strong { display: block; font-size: 0.9rem; font-weight: 600; color: var(--color-text-primary); }
+    .tpl-info span { font-size: 0.78rem; color: var(--color-text-secondary); line-height: 1.3; }
   `]
 })
 export class DashboardComponent implements OnInit {
@@ -164,7 +239,67 @@ export class DashboardComponent implements OnInit {
 
   get user() { return this.storage.user(); }
 
-  constructor(private expenseService: ExpenseService, private storage: StorageService) {}
+  templateDone = false;
+  templateLoading: string | null = null;
+  readonly onboardingTemplates: { name: string; icon: string; desc: string; movements: { title: string; type: 'receita' | 'divida'; description: string }[] }[] = [
+    {
+      name: 'Pessoal',
+      icon: 'person',
+      desc: 'Salário, alimentação, transporte, lazer e saúde',
+      movements: [
+        { title: 'Salário',      type: 'receita', description: 'Receita mensal de trabalho' },
+        { title: 'Alimentação',  type: 'divida',  description: 'Supermercado e restaurantes' },
+        { title: 'Transporte',   type: 'divida',  description: 'Combustível e transporte público' },
+        { title: 'Lazer',        type: 'divida',  description: 'Entretenimento e passeios' },
+        { title: 'Saúde',        type: 'divida',  description: 'Plano de saúde e farmácia' },
+      ]
+    },
+    {
+      name: 'Família',
+      icon: 'family_restroom',
+      desc: 'Salário do casal, escola, saúde, mercado e casa',
+      movements: [
+        { title: 'Salário',            type: 'receita', description: 'Renda familiar mensal' },
+        { title: 'Escola',             type: 'divida',  description: 'Mensalidade e material escolar' },
+        { title: 'Supermercado',       type: 'divida',  description: 'Compras mensais de mercado' },
+        { title: 'Saúde e Plano',      type: 'divida',  description: 'Plano de saúde familiar' },
+        { title: 'Energia e Internet', type: 'divida',  description: 'Contas de luz, água e internet' },
+        { title: 'Cartão Crédito',     type: 'divida',  description: 'Fatura do cartão de crédito' },
+      ]
+    },
+    {
+      name: 'Freelancer',
+      icon: 'laptop_mac',
+      desc: 'Projetos, equipamentos, softwares e impostos MEI',
+      movements: [
+        { title: 'Projetos',         type: 'receita', description: 'Receita de projetos e clientes' },
+        { title: 'Alimentação',      type: 'divida',  description: 'Refeições e delivery' },
+        { title: 'Equipamentos',     type: 'divida',  description: 'Hardware, licenças e assinaturas' },
+        { title: 'Coworking',        type: 'divida',  description: 'Aluguel de espaço de trabalho' },
+        { title: 'Impostos MEI',     type: 'divida',  description: 'DAS mensal e obrigações fiscais' },
+      ]
+    },
+    {
+      name: 'Empresa',
+      icon: 'business_center',
+      desc: 'Faturamento, folha, aluguel, fornecedores e impostos',
+      movements: [
+        { title: 'Faturamento',        type: 'receita', description: 'Receita de vendas e serviços' },
+        { title: 'Folha de Pagamento', type: 'divida',  description: 'Salários e encargos trabalhistas' },
+        { title: 'Aluguel',            type: 'divida',  description: 'Aluguel e condomínio comercial' },
+        { title: 'Fornecedores',       type: 'divida',  description: 'Pagamento a fornecedores' },
+        { title: 'Marketing',          type: 'divida',  description: 'Google Ads e redes sociais' },
+        { title: 'Impostos',           type: 'divida',  description: 'Simples Nacional, ISS e tributos' },
+      ]
+    },
+  ];
+
+  constructor(
+    private expenseService: ExpenseService,
+    private movementService: MovementService,
+    private storage: StorageService,
+    private snack: MatSnackBar
+  ) {}
 
   ngOnInit(): void { this.loadSummary(); }
 
@@ -173,6 +308,23 @@ export class DashboardComponent implements OnInit {
     this.expenseService.getSummary(this.selectedYear, this.selectedMonth ?? undefined).subscribe({
       next: res => { if (res.success) this.summary = res.data; },
       complete: () => this.loading = false
+    });
+  }
+
+  applyTemplate(t: typeof this.onboardingTemplates[0]): void {
+    if (this.templateLoading) return;
+    this.templateLoading = t.name;
+    forkJoin(t.movements.map(m => this.movementService.create(m))).subscribe({
+      next: () => {
+        this.templateDone = true;
+        this.templateLoading = null;
+        this.snack.open(`Categorias do modelo "${t.name}" criadas! Agora registre seus gastos.`, 'OK', { duration: 5000 });
+        this.loadSummary();
+      },
+      error: () => {
+        this.templateLoading = null;
+        this.snack.open('Não foi possível criar as categorias. Tente novamente.', 'Fechar', { duration: 4000 });
+      }
     });
   }
 }
