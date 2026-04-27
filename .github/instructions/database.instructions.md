@@ -4,6 +4,10 @@ applyTo: database/**
 
 # Database Instructions — PostgreSQL Scripts
 
+## Diretriz de Contexto IA
+- Antes de exploracoes amplas, respeitar `/.claudeignore` para reduzir tokens.
+- Se algum arquivo ignorado for necessario para diagnostico/implementacao, solicitar confirmacao do usuario antes da leitura.
+
 ## Convenção de Nomenclatura de Arquivos
 - Formato: `NNN_descricao_curta.sql` (ex: `001_create_tables.sql`, `004_add_category_to_expenses.sql`)
 - **Nunca alterar** scripts já existentes — criar sempre um novo arquivo de migration.

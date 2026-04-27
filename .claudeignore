@@ -1,0 +1,62 @@
+# FinFlow .claudeignore
+# Objetivo: reduzir custo de tokens durante interacoes de IA.
+# Regra: se um item ignorado for necessario para resolver a tarefa,
+# a IA deve solicitar confirmacao explicita do usuario antes da leitura.
+
+# Dependencias e caches
+node_modules/
+frontend/node_modules/
+.angular/
+frontend/.angular/
+.cache/
+frontend/.cache/
+
+# Build e artefatos gerados
+bin/
+obj/
+backend/bin/
+backend/obj/
+backend/publish/
+publish/
+dist/
+frontend/dist/
+out-tsc/
+
+# Logs e temporarios
+*.log
+*.tmp
+*.temp
+crash-*.log
+backend/run_log.txt
+
+# Dados locais pesados e uploads
+backend/uploads/
+infra/postgres-data/
+*.pdf
+*.zip
+*.tar
+*.gz
+*.7z
+*.bak
+*.dump
+*.sql.gz
+
+# Segredos e chaves
+.env
+.env.*
+*.env
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.cer
+infra/SSH/
+.ssh/
+
+# Metadados de IDE e sistema
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

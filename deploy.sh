@@ -54,7 +54,11 @@ command -v rsync  >/dev/null || warn "rsync não encontrado — usando scp como 
 if [ "$BACKEND_ONLY" = false ]; then
   log "Build do Frontend Angular (produção)..."
   cd frontend
-  npm ci --silent
+  # npm ci pode falhar com Node.js versões ímpares (ex: v25) no Git Bash
+  # só instala se node_modules não existir
+  if [ ! -d "node_modules" ]; then
+    npm install --silent
+  fi
   npx ng build --configuration=production
   cd ..
   log "Frontend gerado em frontend/dist/"

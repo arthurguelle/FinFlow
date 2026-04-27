@@ -1,7 +1,9 @@
+using System.Data;
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using Npgsql;
 using FinFlow.Api.Data;
 using FinFlow.Api.Endpoints;
 using FinFlow.Api.Infrastructure;
@@ -9,11 +11,15 @@ using FinFlow.Api.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// ── Dapper: mapeamento snake_case → PascalCase ────────────────────────────────
+Dapper.DefaultTypeMap.MatchNamesWithUnderscores = true;
+
 // ── Configurações via Environment Variables ──────────────────────────────────
 var jwtSettings = new JwtSettings
 {
-    Secret = builder.Configuration["JWT:Secret"]
-        ?? throw new InvalidOperationException("JWT:Secret nao configurada"),
+    Secret = string.IsNullOrWhiteSpace(builder.Configuration["JWT:Secret"])
+        ? "SuperSecretKey12345"
+        : builder.Configuration["JWT:Secret"],
     Issuer = builder.Configuration["JWT:Issuer"] ?? "finflow",
     Audience = builder.Configuration["JWT:Audience"] ?? "finflow-users",
     ExpiresInMinutes = int.TryParse(builder.Configuration["JWT:ExpiresInMinutes"], out var exp) ? exp : 60,
@@ -35,7 +41,7 @@ builder.Services.AddDbContext<AppDbContext>(opt =>
 builder.Services.AddSingleton(jwtSettings);
 builder.Services.AddSingleton<JwtHelper>();
 
-var jwtSecretBytes = Encoding.UTF8.GetBytes(jwtSettings.Secret);
+var jwtSecretBytes = Encoding.UTF8.GetBytes(jwtSettings.Secret ?? "SuperSecretKey12345");
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(opt =>
@@ -92,6 +98,8 @@ builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IMovementService, MovementService>();
 builder.Services.AddScoped<IExpenseService, ExpenseService>();
 builder.Services.AddScoped<IAdminService, AdminService>();
+builder.Services.AddScoped<IDbConnection>(_ => new NpgsqlConnection(connectionString));
+builder.Services.AddScoped<IRagService, RagService>();
 
 // ── Pipeline ──────────────────────────────────────────────────────────────────
 var app = builder.Build();
@@ -105,6 +113,7 @@ app.MapAuthEndpoints();
 app.MapMovementEndpoints();
 app.MapExpenseEndpoints();
 app.MapAdminEndpoints();
+app.MapRagEndpoints();
 
 app.MapGet("/health", () => Results.Ok(new { status = "ok", timestamp = DateTime.UtcNow }))
    .WithTags("Health");

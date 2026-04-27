@@ -13,6 +13,7 @@ import { ExpenseService, MovementService } from '../../core/services/api.service
 import { StorageService } from '../../core/services/storage.service';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { Summary } from '../../core/models/models';
+import { RagService, RagSuggestion } from '../../core/services/rag.service';
 
 @Component({
   selector: 'app-dashboard',
@@ -150,6 +151,50 @@ import { Summary } from '../../core/models/models';
           <mat-icon>category</mat-icon> Gerenciar Categorias
         </button>
       </div>
+
+      <mat-card class="rag-card">
+        <mat-card-header>
+          <mat-icon mat-card-avatar class="rag-avatar">auto_awesome</mat-icon>
+          <mat-card-title>Insights IA</mat-card-title>
+          <mat-card-subtitle>Análise personalizada dos seus gastos</mat-card-subtitle>
+          <button mat-icon-button class="rag-refresh" (click)="getSuggestions()" [disabled]="ragLoading" title="Atualizar insights">
+            <mat-icon>refresh</mat-icon>
+          </button>
+        </mat-card-header>
+        <mat-card-content>
+          @if (ragLoading) {
+            <div class="rag-state">
+              <mat-spinner diameter="28"></mat-spinner>
+              <span>Analisando seus gastos...</span>
+            </div>
+          } @else if (ragError) {
+            <div class="rag-state rag-state-error">
+              <mat-icon>error_outline</mat-icon>
+              <span>Insights temporariamente indisponíveis.</span>
+              <button mat-stroked-button (click)="getSuggestions()">Tentar novamente</button>
+            </div>
+          } @else if (ragSuggestions.length === 0) {
+            <div class="rag-state">
+              <mat-icon>insights</mat-icon>
+              <span>Adicione gastos para receber dicas personalizadas.</span>
+            </div>
+          } @else {
+            <div class="rag-grid">
+              @for (s of ragSuggestions; track s.category) {
+                <div class="rag-item">
+                  <div class="rag-item-header">
+                    <span class="rag-category">{{ s.category }}</span>
+                    <span class="rag-avg">Média: {{ s.averageSpent | currency:'BRL':'symbol':'1.2-2':'pt' }}</span>
+                  </div>
+                  @if (s.tip) {
+                    <p class="rag-tip"><mat-icon class="rag-tip-icon">lightbulb</mat-icon>{{ s.tip }}</p>
+                  }
+                </div>
+              }
+            </div>
+          }
+        </mat-card-content>
+      </mat-card>
     </div>
   `,
   styles: [`
@@ -219,6 +264,22 @@ import { Summary } from '../../core/models/models';
     .tpl-icon mat-icon { color: var(--color-primary); }
     .tpl-info strong { display: block; font-size: 0.9rem; font-weight: 600; color: var(--color-text-primary); }
     .tpl-info span { font-size: 0.78rem; color: var(--color-text-secondary); line-height: 1.3; }
+    /* RAG insights */
+    .rag-card { margin-top: 1.5rem; }
+    .rag-card mat-card-header { display: flex; align-items: center; }
+    .rag-avatar { color: var(--color-primary) !important; background: transparent !important; }
+    .rag-refresh { margin-left: auto; color: var(--color-text-secondary); }
+    .rag-state { display: flex; align-items: center; gap: 0.75rem; padding: 1rem 0; color: var(--color-text-secondary); font-size: 0.9rem; }
+    .rag-state mat-icon { opacity: 0.6; }
+    .rag-state-error { color: #c62828; }
+    .rag-state-error mat-icon { opacity: 1; }
+    .rag-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1rem; padding-top: 0.5rem; }
+    .rag-item { border: 1px solid var(--color-border); border-radius: 10px; padding: 1rem; background: var(--color-background); }
+    .rag-item-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; }
+    .rag-category { font-weight: 600; color: var(--color-primary); font-size: 0.95rem; }
+    .rag-avg { font-size: 0.8rem; color: var(--color-text-secondary); }
+    .rag-tip { margin: 0; font-size: 0.85rem; color: var(--color-text-secondary); display: flex; align-items: flex-start; gap: 0.35rem; line-height: 1.5; }
+    .rag-tip-icon { font-size: 1rem; height: 1rem; width: 1rem; color: #f9a825; flex-shrink: 0; margin-top: 1px; }
   `]
 })
 export class DashboardComponent implements OnInit {
@@ -236,6 +297,10 @@ export class DashboardComponent implements OnInit {
     { value: 9, label: 'Setembro' }, { value: 10, label: 'Outubro' },
     { value: 11, label: 'Novembro' }, { value: 12, label: 'Dezembro' },
   ];
+
+  ragSuggestions: RagSuggestion[] = [];
+  ragLoading = false;
+  ragError = false;
 
   get user() { return this.storage.user(); }
 
@@ -298,10 +363,11 @@ export class DashboardComponent implements OnInit {
     private expenseService: ExpenseService,
     private movementService: MovementService,
     private storage: StorageService,
-    private snack: MatSnackBar
+    private snack: MatSnackBar,
+    private ragService: RagService
   ) {}
 
-  ngOnInit(): void { this.loadSummary(); }
+  ngOnInit(): void { this.loadSummary(); this.getSuggestions(); }
 
   loadSummary(): void {
     this.loading = true;
@@ -324,6 +390,23 @@ export class DashboardComponent implements OnInit {
       error: () => {
         this.templateLoading = null;
         this.snack.open('Não foi possível criar as categorias. Tente novamente.', 'Fechar', { duration: 4000 });
+      }
+    });
+  }
+
+  getSuggestions(): void {
+    const userId = this.user?.id ?? '';
+    if (!userId) return;
+    this.ragLoading = true;
+    this.ragError = false;
+    this.ragService.getSuggestions(userId).subscribe({
+      next: res => {
+        if (res.success) this.ragSuggestions = res.data;
+        this.ragLoading = false;
+      },
+      error: () => {
+        this.ragError = true;
+        this.ragLoading = false;
       }
     });
   }

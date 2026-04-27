@@ -4,6 +4,10 @@ applyTo: frontend/**
 
 # Frontend Instructions — Angular + Angular Material
 
+## Diretriz de Contexto IA
+- Antes de exploracoes amplas, respeitar `/.claudeignore` para reduzir tokens.
+- Se algum arquivo ignorado for necessario para diagnostico/implementacao, solicitar confirmacao do usuario antes da leitura.
+
 ## Estrutura de Pastas
 ```
 frontend/src/app/

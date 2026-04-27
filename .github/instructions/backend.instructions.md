@@ -4,6 +4,10 @@ applyTo: backend/**
 
 # Backend Instructions — .NET 10 Minimal APIs
 
+## Diretriz de Contexto IA
+- Antes de exploracoes amplas, respeitar `/.claudeignore` para reduzir tokens.
+- Se algum arquivo ignorado for necessario para diagnostico/implementacao, solicitar confirmacao do usuario antes da leitura.
+
 ## Estrutura de Pastas
 ```
 backend/

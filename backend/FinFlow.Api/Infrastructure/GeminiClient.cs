@@ -1,12 +1,26 @@
 using System.Text;
 using System.Text.Json;
 using FinFlow.Api.Models;
+using System.Net.Http;
+using System.Threading.Tasks;
+using FinFlow.Api.Endpoints;
 
 namespace FinFlow.Api.Infrastructure;
 
-public class GeminiClient(IHttpClientFactory httpFactory, IConfiguration config, ILogger<GeminiClient> logger) : IAiExtractor
+public class GeminiClient : IAiExtractor
 {
-    private readonly string _apiKey = config["GEMINI:ApiKey"] ?? "";
+    private readonly IHttpClientFactory _httpFactory;
+    private readonly IConfiguration _config;
+    private readonly ILogger<GeminiClient> _logger;
+    private readonly string _apiKey;
+
+    public GeminiClient(IHttpClientFactory httpFactory, IConfiguration config, ILogger<GeminiClient> logger)
+    {
+        _httpFactory = httpFactory;
+        _config = config;
+        _logger = logger;
+        _apiKey = config["GEMINI:ApiKey"] ?? "";
+    }
 
     private const string PromptTemplate = """
         Analise este texto extraído de uma fatura ou boleto bancário e retorne SOMENTE um JSON válido:
@@ -36,7 +50,7 @@ public class GeminiClient(IHttpClientFactory httpFactory, IConfiguration config,
             contents = new[] { new { parts = new[] { new { text = prompt } } } }
         };
 
-        var client = httpFactory.CreateClient();
+        var client = _httpFactory.CreateClient();
         HttpResponseMessage response = null!;
         string? lastError = null;
 
@@ -48,25 +62,25 @@ public class GeminiClient(IHttpClientFactory httpFactory, IConfiguration config,
             try
             {
                 response = await client.PostAsync(url, reqContent);
-                if (response.IsSuccessStatusCode) { logger.LogInformation("Gemini modelo: {Model}", model); break; }
+                if (response.IsSuccessStatusCode) { _logger.LogInformation("Gemini modelo: {Model}", model); break; }
                 if (response.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
                 {
-                    logger.LogWarning("Modelo {Model} rate limited, aguardando 3s...", model);
+                    _logger.LogWarning("Modelo {Model} rate limited, aguardando 3s...", model);
                     await Task.Delay(3000);
                     reqContent = new StringContent(json, Encoding.UTF8, "application/json");
                     response = await client.PostAsync(url, reqContent);
                     if (response.IsSuccessStatusCode) { break; }
                 }
                 lastError = $"{model}: {(int)response.StatusCode}";
-                logger.LogWarning("Modelo {Model} retornou {Status}", model, response.StatusCode);
+                _logger.LogWarning("Modelo {Model} retornou {Status}", model, response.StatusCode);
             }
-            catch (Exception ex) { lastError = ex.Message; logger.LogWarning(ex, "Erro modelo {Model}", model); }
+            catch (Exception ex) { lastError = ex.Message; _logger.LogWarning(ex, "Erro modelo {Model}", model); }
         }
 
         try { response.EnsureSuccessStatusCode(); }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Todos os modelos Gemini falharam. Último: {Error}", lastError);
+            _logger.LogError(ex, "Todos os modelos Gemini falharam. Último: {Error}", lastError);
             throw;
         }
 
@@ -83,8 +97,13 @@ public class GeminiClient(IHttpClientFactory httpFactory, IConfiguration config,
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Erro ao parsear resposta Gemini: {Resp}", responseJson[..Math.Min(500, responseJson.Length)]);
+            _logger.LogError(ex, "Erro ao parsear resposta Gemini: {Resp}", responseJson[..Math.Min(500, responseJson.Length)]);
             throw new InvalidOperationException("Não foi possível extrair gastos do PDF. Tente novamente ou insira manualmente.");
         }
+    }
+
+    public class GeminiResponse
+    {
+        public decimal EnrichedAmount { get; set; }
     }
 }

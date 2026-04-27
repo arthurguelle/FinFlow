@@ -1,5 +1,21 @@
 # FinFlow — Copilot Workspace Instructions
 
+## Diretiva de Ignore para IA (Leitura Obrigatoria)
+- Antes de qualquer varredura ampla no repositorio, ler e respeitar `/.claudeignore`.
+- Objetivo: reduzir custo de tokens e evitar leitura de artefatos irrelevantes.
+- Precedencia operacional:
+	1. Regras de `/.claudeignore`
+	2. Regras de `/.gitignore` como baseline complementar
+- Excecao: se um arquivo ignorado for indispensavel para resolver a tarefa, solicitar confirmacao explicita ao usuario antes de ler.
+
+## Economia de Tokens (Operacao Padrao)
+- Preferir buscas especificas com padrao de pasta/arquivo, evitando scans globais sem filtro.
+- Ler arquivos grandes por blocos relevantes (faixas de linha) em vez de carregar tudo de uma vez.
+- Priorizar diff/resumo objetivo em vez de reproduzir arquivos completos na resposta.
+- Em caso de erro, compartilhar apenas trechos essenciais do log (erro + contexto imediato).
+- Se a tarefa estiver ampla, quebrar em subtarefas curtas para reduzir contexto acumulado.
+- Sempre confirmar necessidade antes de abrir artefatos pesados (PDFs, dumps, binarios, backups).
+
 ## Visão Geral do Projeto
 FinFlow é um sistema financeiro web que recebe PDFs de faturas/boletos, extrai gastos via Gemini AI, e apresenta totalizadores financeiros. Roda em VPS com 1GB RAM.
 
