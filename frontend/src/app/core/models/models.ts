@@ -31,7 +31,7 @@ export interface Movement {
   id: string;
   title: string;
   description?: string;
-  type: 'receita' | 'divida';
+  type: 'receita' | 'divida' | 'promessa_pagamento' | 'promessa_recebimento';
   createdAt: string;
 }
 
@@ -40,8 +40,9 @@ export interface Expense {
   title: string;
   amount: number;
   expenseDate: string;
+  dueDate?: string | null;
   sourceFile?: string;
-  movementId?: string;
+  movementId?: string | null;
   movementTitle?: string;
   movementType?: string;
   createdAt: string;
@@ -52,6 +53,7 @@ export interface Summary {
   totalDividas: number;
   saldo: number;
   byMovement: MovementSummary[];
+  promises: PromiseExpense[];
 }
 
 export interface MovementSummary {
@@ -59,6 +61,19 @@ export interface MovementSummary {
   title: string;
   type: string;
   total: number;
+}
+
+export interface PromiseExpense {
+  expenseId: string;
+  movementId?: string | null;
+  title: string;
+  amount: number;
+  expenseDate: string;
+  dueDate: string;
+  promiseType: 'promessa_pagamento' | 'promessa_recebimento';
+  movementTitle?: string;
+  isOverdue: boolean;
+  daysOverdue: number;
 }
 
 export interface ExtractedExpenseItem {

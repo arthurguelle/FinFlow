@@ -27,6 +27,11 @@ public class ExpenseService(
     IAiExtractor ai,
     IWebHostEnvironment env) : IExpenseService
 {
+    private const string ReceitaType = "receita";
+    private const string DividaType = "divida";
+    private const string PromessaPagamentoType = "promessa_pagamento";
+    private const string PromessaRecebimentoType = "promessa_recebimento";
+
     public async Task<IEnumerable<ExpenseDto>> GetAllAsync(Guid userId, int? year, int? month)
     {
         var query = db.Expenses
@@ -56,13 +61,17 @@ public class ExpenseService(
 
     public async Task<ExpenseDto> CreateAsync(Guid userId, CreateExpenseRequest request)
     {
+        var movementType = await GetMovementTypeAsync(userId, request.MovementId);
+        ValidatePromiseDueDate(movementType, request.DueDate);
+
         var expense = new Expense
         {
             UserId = userId,
             MovementId = request.MovementId,
             Title = request.Title.Trim(),
             Amount = request.Amount,
-            ExpenseDate = request.ExpenseDate
+            ExpenseDate = request.ExpenseDate,
+            DueDate = request.DueDate
         };
 
         db.Expenses.Add(expense);
@@ -74,6 +83,9 @@ public class ExpenseService(
 
     public async Task<ExpenseDto> UpdateAsync(Guid id, Guid userId, UpdateExpenseRequest request)
     {
+        var movementType = await GetMovementTypeAsync(userId, request.MovementId);
+        ValidatePromiseDueDate(movementType, request.DueDate);
+
         var expense = await db.Expenses
             .Include(e => e.Movement)
             .FirstOrDefaultAsync(e => e.Id == id && e.UserId == userId && e.DeletedAt == null)
@@ -82,6 +94,7 @@ public class ExpenseService(
         expense.Title = request.Title.Trim();
         expense.Amount = request.Amount;
         expense.ExpenseDate = request.ExpenseDate;
+        expense.DueDate = request.DueDate;
         expense.MovementId = request.MovementId;
         expense.UpdatedAt = DateTime.UtcNow;
 
@@ -114,15 +127,16 @@ public class ExpenseService(
         var expenses = await query.ToListAsync();
 
         var receitas = expenses
-            .Where(e => e.Movement?.Type == "receita")
+            .Where(e => e.Movement?.Type == ReceitaType)
             .Sum(e => e.Amount);
 
         var dividas = expenses
-            .Where(e => e.Movement?.Type == "divida" || e.Movement == null)
+            .Where(e => e.Movement?.Type == DividaType || e.Movement == null)
             .Sum(e => e.Amount);
 
         var byMovement = expenses
-            .GroupBy(e => new { e.MovementId, Title = e.Movement?.Title ?? "Sem categoria", Type = e.Movement?.Type ?? "divida" })
+            .Where(e => e.Movement?.Type == ReceitaType || e.Movement?.Type == DividaType || e.Movement == null)
+            .GroupBy(e => new { e.MovementId, Title = e.Movement?.Title ?? "Sem categoria", Type = e.Movement?.Type ?? DividaType })
             .Select(g => new MovementSummaryDto(
                 g.Key.MovementId ?? Guid.Empty,
                 g.Key.Title,
@@ -131,7 +145,41 @@ public class ExpenseService(
             ))
             .OrderByDescending(m => m.Total);
 
-        return new SummaryDto(receitas, dividas, receitas - dividas, byMovement);
+        // Promessas devem aparecer independentemente do filtro mensal.
+        var allPromises = await db.Expenses
+            .Include(e => e.Movement)
+            .Where(e => e.UserId == userId
+                && e.DeletedAt == null
+                && e.DueDate != null
+                && e.Movement != null
+                && (e.Movement.Type == PromessaPagamentoType || e.Movement.Type == PromessaRecebimentoType))
+            .ToListAsync();
+
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var promises = allPromises
+            .Select(e =>
+            {
+                var dueDate = e.DueDate!.Value;
+                var days = today.DayNumber - dueDate.DayNumber;
+                var isOverdue = days > 0;
+                return new PromiseExpenseDto(
+                    e.Id,
+                    e.MovementId,
+                    e.Title,
+                    e.Amount,
+                    e.ExpenseDate,
+                    dueDate,
+                    e.Movement!.Type,
+                    e.Movement.Title,
+                    isOverdue,
+                    isOverdue ? days : 0
+                );
+            })
+            .OrderByDescending(p => p.IsOverdue)
+            .ThenBy(p => p.DueDate)
+            .ToList();
+
+        return new SummaryDto(receitas, dividas, receitas - dividas, byMovement, promises);
     }
 
     public async Task<PdfExtractResponse> ExtractFromPdfAsync(Guid userId, IFormFile file, string? password = null)
@@ -288,6 +336,24 @@ public class ExpenseService(
     }
 
     private static ExpenseDto ToDto(Expense e) =>
-        new(e.Id, e.Title, e.Amount, e.ExpenseDate, e.SourceFile,
+        new(e.Id, e.Title, e.Amount, e.ExpenseDate, e.DueDate, e.SourceFile,
             e.MovementId, e.Movement?.Title, e.Movement?.Type, e.CreatedAt);
+
+    private async Task<string?> GetMovementTypeAsync(Guid userId, Guid? movementId)
+    {
+        if (!movementId.HasValue)
+            return null;
+
+        var movement = await db.Movements
+            .FirstOrDefaultAsync(m => m.Id == movementId.Value && m.UserId == userId && m.DeletedAt == null)
+            ?? throw new ArgumentException("Categoria inválida para este usuário.");
+
+        return movement.Type;
+    }
+
+    private static void ValidatePromiseDueDate(string? movementType, DateOnly? dueDate)
+    {
+        if ((movementType == PromessaPagamentoType || movementType == PromessaRecebimentoType) && dueDate is null)
+            throw new ArgumentException("Data limite é obrigatória para promessas.");
+    }
 }

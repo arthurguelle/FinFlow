@@ -7,12 +7,13 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSelectModule } from '@angular/material/select';
 import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatInputModule } from '@angular/material/input';
 import { FormsModule } from '@angular/forms';
 import { forkJoin } from 'rxjs';
 import { ExpenseService, MovementService } from '../../core/services/api.service';
 import { StorageService } from '../../core/services/storage.service';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
-import { Summary } from '../../core/models/models';
+import { Movement, PromiseExpense, Summary } from '../../core/models/models';
 import { RagService, RagSuggestion } from '../../core/services/rag.service';
 
 @Component({
@@ -21,7 +22,7 @@ import { RagService, RagSuggestion } from '../../core/services/rag.service';
   imports: [
     CommonModule, RouterModule, FormsModule, CurrencyPipe,
     MatCardModule, MatIconModule, MatButtonModule,
-    MatProgressSpinnerModule, MatSelectModule, MatFormFieldModule,
+    MatProgressSpinnerModule, MatSelectModule, MatFormFieldModule, MatInputModule,
     MatSnackBarModule
   ],
   template: `
@@ -119,6 +120,77 @@ import { RagService, RagSuggestion } from '../../core/services/rag.service';
           </div>
         }
 
+        @if (summary.promises.length > 0) {
+          <mat-card class="promises-list">
+            <mat-card-header>
+              <mat-card-title>Promessas</mat-card-title>
+              <mat-card-subtitle>Pendentes de readequação manual</mat-card-subtitle>
+            </mat-card-header>
+            <mat-card-content>
+              @for (p of summary.promises; track p.expenseId) {
+                <div class="promise-row" [class.promise-overdue]="p.isOverdue">
+                  <div class="promise-main">
+                    <strong>{{ p.title }}</strong>
+                    <span>{{ promiseTypeLabel(p.promiseType) }} • Vence em {{ p.dueDate }}</span>
+                  </div>
+                  <div class="promise-side">
+                    <strong>{{ p.amount | currency:'BRL':'symbol':'1.2-2':'pt' }}</strong>
+                    <span class="promise-badge" [class.promise-badge-overdue]="p.isOverdue">
+                      {{ promiseBadgeLabel(p) }}
+                    </span>
+                      <button mat-icon-button class="promise-edit-icon" (click)="startPromiseEdit(p)" title="Editar promessa">
+                        <mat-icon>edit</mat-icon>
+                      </button>
+                  </div>
+                </div>
+              }
+
+                @if (promiseEdit) {
+                  <div class="promise-edit-panel">
+                    <h4>Editar promessa</h4>
+                    <div class="promise-edit-grid">
+                      <mat-form-field appearance="outline">
+                        <mat-label>Título</mat-label>
+                        <input matInput [(ngModel)]="promiseEdit.title">
+                      </mat-form-field>
+
+                      <mat-form-field appearance="outline">
+                        <mat-label>Valor (R$)</mat-label>
+                        <input matInput type="number" min="0.01" step="0.01" [(ngModel)]="promiseEdit.amount">
+                      </mat-form-field>
+
+                      <mat-form-field appearance="outline">
+                        <mat-label>Data lançamento</mat-label>
+                        <input matInput type="date" [(ngModel)]="promiseEdit.expenseDate">
+                      </mat-form-field>
+
+                      <mat-form-field appearance="outline">
+                        <mat-label>Data limite</mat-label>
+                        <input matInput type="date" [(ngModel)]="promiseEdit.dueDate">
+                      </mat-form-field>
+
+                      <mat-form-field appearance="outline" class="promise-edit-full">
+                        <mat-label>Categoria para readequar</mat-label>
+                        <mat-select [(ngModel)]="promiseEdit.movementId">
+                          @for (m of movements; track m.id) {
+                            <mat-option [value]="m.id">{{ m.title }} ({{ movementTypeLabel(m.type) }})</mat-option>
+                          }
+                        </mat-select>
+                      </mat-form-field>
+                    </div>
+
+                    <div class="promise-edit-actions">
+                      <button mat-button (click)="cancelPromiseEdit()">Cancelar</button>
+                      <button mat-raised-button color="primary" (click)="savePromiseEdit()" [disabled]="savingPromiseEdit">
+                        {{ savingPromiseEdit ? 'Salvando...' : 'Salvar alterações' }}
+                      </button>
+                    </div>
+                  </div>
+                }
+            </mat-card-content>
+          </mat-card>
+        }
+
         @if (summary.byMovement.length > 0) {
           <mat-card class="movements-breakdown">
             <mat-card-header>
@@ -214,6 +286,67 @@ import { RagService, RagSuggestion } from '../../core/services/rag.service';
     .divida mat-icon, .divida h3 { color: #c62828; }
     .saldo-positivo mat-icon, .saldo-positivo h3 { color: #1565c0; }
     .saldo-negativo mat-icon, .saldo-negativo h3 { color: #c62828; }
+    .promises-list { margin-bottom: 1.5rem; }
+    .promise-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.8rem 0;
+      border-bottom: 1px solid var(--color-border);
+    }
+    .promise-row:last-child { border-bottom: none; }
+    .promise-main { display: flex; flex-direction: column; gap: 0.2rem; }
+    .promise-main span { font-size: 0.82rem; color: var(--color-text-secondary); }
+    .promise-side { display: flex; flex-direction: column; align-items: flex-end; gap: 0.3rem; }
+    .promise-edit-icon {
+      width: 30px;
+      height: 30px;
+      line-height: 30px;
+      color: var(--color-text-secondary);
+    }
+    .promise-edit-icon mat-icon {
+      font-size: 1rem;
+      width: 1rem;
+      height: 1rem;
+      line-height: 1rem;
+    }
+    .promise-edit-icon:hover {
+      color: var(--color-primary);
+      background: rgba(74, 111, 165, 0.08);
+    }
+    .promise-badge {
+      border-radius: 999px;
+      padding: 0.15rem 0.55rem;
+      font-size: 0.75rem;
+      background: #eceff1;
+      color: #455a64;
+      font-weight: 600;
+    }
+    .promise-badge-overdue { background: #ffebee; color: #b71c1c; }
+    .promise-overdue .promise-main strong { color: #b71c1c; }
+    .promise-edit-panel {
+      margin-top: 1rem;
+      padding-top: 1rem;
+      border-top: 1px solid var(--color-border);
+    }
+    .promise-edit-panel h4 {
+      margin: 0 0 0.75rem 0;
+      color: var(--color-primary);
+      font-size: 1rem;
+    }
+    .promise-edit-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 0.5rem;
+    }
+    .promise-edit-full { grid-column: 1 / -1; }
+    .promise-edit-actions {
+      margin-top: 0.5rem;
+      display: flex;
+      justify-content: flex-end;
+      gap: 0.5rem;
+    }
     .movements-breakdown { margin-bottom: 1.5rem; }
     .movement-row { display: flex; justify-content: space-between; align-items: center; padding: 0.75rem 0; border-bottom: 1px solid var(--color-border); }
     .movement-row:last-child { border-bottom: none; }
@@ -284,7 +417,17 @@ import { RagService, RagSuggestion } from '../../core/services/rag.service';
 })
 export class DashboardComponent implements OnInit {
   summary: Summary | null = null;
+  movements: Movement[] = [];
   loading = false;
+  savingPromiseEdit = false;
+  promiseEdit: {
+    expenseId: string;
+    title: string;
+    amount: number;
+    expenseDate: string;
+    dueDate: string;
+    movementId: string | null;
+  } | null = null;
   selectedYear = new Date().getFullYear();
   selectedMonth: number | null = new Date().getMonth() + 1;
 
@@ -367,7 +510,17 @@ export class DashboardComponent implements OnInit {
     private ragService: RagService
   ) {}
 
-  ngOnInit(): void { this.loadSummary(); this.getSuggestions(); }
+  ngOnInit(): void {
+    this.loadSummary();
+    this.loadMovements();
+    this.getSuggestions();
+  }
+
+  loadMovements(): void {
+    this.movementService.getAll().subscribe({
+      next: res => { if (res.success && res.data) this.movements = res.data; }
+    });
+  }
 
   loadSummary(): void {
     this.loading = true;
@@ -409,5 +562,86 @@ export class DashboardComponent implements OnInit {
         this.ragLoading = false;
       }
     });
+  }
+
+  startPromiseEdit(p: PromiseExpense): void {
+    this.promiseEdit = {
+      expenseId: p.expenseId,
+      title: p.title,
+      amount: p.amount,
+      expenseDate: p.expenseDate,
+      dueDate: p.dueDate,
+      movementId: p.movementId ?? null
+    };
+  }
+
+  cancelPromiseEdit(): void {
+    this.promiseEdit = null;
+  }
+
+  savePromiseEdit(): void {
+    if (!this.promiseEdit) return;
+
+    if (!this.promiseEdit.title.trim()) {
+      this.snack.open('Título é obrigatório.', 'Fechar', { duration: 2500 });
+      return;
+    }
+
+    if (!this.promiseEdit.dueDate) {
+      this.snack.open('Data limite é obrigatória para promessa.', 'Fechar', { duration: 3000 });
+      return;
+    }
+
+    this.savingPromiseEdit = true;
+    this.expenseService.update(this.promiseEdit.expenseId, {
+      title: this.promiseEdit.title,
+      amount: this.promiseEdit.amount,
+      expenseDate: this.promiseEdit.expenseDate,
+      dueDate: this.promiseEdit.dueDate,
+      movementId: this.promiseEdit.movementId
+    }).subscribe({
+      next: res => {
+        if (res.success) {
+          this.snack.open('Promessa atualizada com sucesso.', 'OK', { duration: 2200 });
+          this.promiseEdit = null;
+          this.loadSummary();
+        } else {
+          this.snack.open(res.error ?? 'Não foi possível atualizar a promessa.', 'Fechar', { duration: 3000 });
+        }
+      },
+      error: err => {
+        const msg = err?.error?.error ?? err?.message ?? 'Erro ao atualizar promessa.';
+        this.snack.open(msg, 'Fechar', { duration: 3500 });
+      },
+      complete: () => this.savingPromiseEdit = false
+    });
+  }
+
+  movementTypeLabel(type: Movement['type']): string {
+    if (type === 'receita') return 'Receita';
+    if (type === 'divida') return 'Dívida';
+    if (type === 'promessa_recebimento') return 'Promessa de recebimento';
+    return 'Promessa de pagamento';
+  }
+
+  promiseTypeLabel(type: PromiseExpense['promiseType']): string {
+    return type === 'promessa_recebimento'
+      ? 'Promessa de recebimento'
+      : 'Promessa de pagamento';
+  }
+
+  promiseBadgeLabel(p: PromiseExpense): string {
+    if (p.isOverdue) {
+      return p.daysOverdue === 1 ? '1 dia vencida' : `${p.daysOverdue} dias vencida`;
+    }
+
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const dueDate = new Date(`${p.dueDate}T00:00:00`);
+    const dayMs = 1000 * 60 * 60 * 24;
+    const remaining = Math.max(0, Math.ceil((dueDate.getTime() - today.getTime()) / dayMs));
+
+    if (remaining === 0) return 'Vence hoje';
+    return remaining === 1 ? 'Vence em 1 dia' : `Vence em ${remaining} dias`;
   }
 }

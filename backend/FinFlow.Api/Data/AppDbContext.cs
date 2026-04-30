@@ -56,6 +56,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.Property(x => x.Title).HasColumnName("title").HasMaxLength(255).IsRequired();
             e.Property(x => x.Amount).HasColumnName("amount").HasColumnType("numeric(12,2)");
             e.Property(x => x.ExpenseDate).HasColumnName("expense_date");
+            e.Property(x => x.DueDate).HasColumnName("due_date");
             e.Property(x => x.SourceFile).HasColumnName("source_file").HasMaxLength(255);
             e.Property(x => x.CreatedAt).HasColumnName("created_at");
             e.Property(x => x.UpdatedAt).HasColumnName("updated_at");

@@ -23,7 +23,7 @@ public class Movement
     public Guid UserId { get; set; }
     public string Title { get; set; } = string.Empty;
     public string? Description { get; set; }
-    public string Type { get; set; } = string.Empty; // "receita" | "divida"
+    public string Type { get; set; } = string.Empty; // "receita" | "divida" | "promessa_pagamento" | "promessa_recebimento"
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? DeletedAt { get; set; }
@@ -40,6 +40,7 @@ public class Expense
     public string Title { get; set; } = string.Empty;
     public decimal Amount { get; set; }
     public DateOnly ExpenseDate { get; set; }
+    public DateOnly? DueDate { get; set; }
     public string? SourceFile { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;

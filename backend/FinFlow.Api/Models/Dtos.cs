@@ -51,6 +51,7 @@ public record CreateExpenseRequest(
     string Title,
     decimal Amount,
     DateOnly ExpenseDate,
+    DateOnly? DueDate,
     Guid? MovementId
 );
 
@@ -58,6 +59,7 @@ public record UpdateExpenseRequest(
     string Title,
     decimal Amount,
     DateOnly ExpenseDate,
+    DateOnly? DueDate,
     Guid? MovementId
 );
 
@@ -66,6 +68,7 @@ public record ExpenseDto(
     string Title,
     decimal Amount,
     DateOnly ExpenseDate,
+    DateOnly? DueDate,
     string? SourceFile,
     Guid? MovementId,
     string? MovementTitle,
@@ -78,7 +81,8 @@ public record SummaryDto(
     decimal TotalReceitas,
     decimal TotalDividas,
     decimal Saldo,
-    IEnumerable<MovementSummaryDto> ByMovement
+    IEnumerable<MovementSummaryDto> ByMovement,
+    IEnumerable<PromiseExpenseDto> Promises
 );
 
 public record MovementSummaryDto(
@@ -86,6 +90,19 @@ public record MovementSummaryDto(
     string Title,
     string Type,
     decimal Total
+);
+
+public record PromiseExpenseDto(
+    Guid ExpenseId,
+    Guid? MovementId,
+    string Title,
+    decimal Amount,
+    DateOnly ExpenseDate,
+    DateOnly DueDate,
+    string PromiseType,
+    string? MovementTitle,
+    bool IsOverdue,
+    int DaysOverdue
 );
 
 // ── Bulk Operations ───────────────────────────────────────────────────────────

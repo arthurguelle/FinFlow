@@ -48,6 +48,8 @@ import { Movement } from '../../core/models/models';
                 <mat-select formControlName="type">
                   <mat-option value="receita">Receita</mat-option>
                   <mat-option value="divida">Dívida / Gasto</mat-option>
+                  <mat-option value="promessa_recebimento">Promessa de Recebimento</mat-option>
+                  <mat-option value="promessa_pagamento">Promessa de Pagamento</mat-option>
                 </mat-select>
               </mat-form-field>
               <mat-form-field appearance="outline" class="full-width">
@@ -85,7 +87,7 @@ import { Movement } from '../../core/models/models';
                   <th mat-header-cell *matHeaderCellDef>Tipo</th>
                   <td mat-cell *matCellDef="let m">
                     <mat-chip [class]="m.type">
-                      {{ m.type === 'receita' ? 'Receita' : 'Dívida' }}
+                      {{ movementTypeLabel(m.type) }}
                     </mat-chip>
                   </td>
                 </ng-container>
@@ -123,6 +125,8 @@ import { Movement } from '../../core/models/models';
     .empty-state mat-icon { font-size: 3rem; height: 3rem; width: 3rem; margin-bottom: 1rem; }
     mat-chip.receita { background: #e8f5e9 !important; color: #2e7d32 !important; }
     mat-chip.divida { background: #ffebee !important; color: #c62828 !important; }
+    mat-chip.promessa_recebimento { background: #e3f2fd !important; color: #1565c0 !important; }
+    mat-chip.promessa_pagamento { background: #fff3e0 !important; color: #ef6c00 !important; }
   `]
 })
 export class MovementsComponent implements OnInit {
@@ -138,9 +142,16 @@ export class MovementsComponent implements OnInit {
   constructor(private service: MovementService, private fb: FormBuilder, private snack: MatSnackBar) {
     this.form = this.fb.group({
       title: ['', Validators.required],
-      type: ['divida' as 'receita' | 'divida', Validators.required],
+      type: ['divida' as 'receita' | 'divida' | 'promessa_pagamento' | 'promessa_recebimento', Validators.required],
       description: ['']
     });
+  }
+
+  movementTypeLabel(type: Movement['type']): string {
+    if (type === 'receita') return 'Receita';
+    if (type === 'divida') return 'Dívida';
+    if (type === 'promessa_recebimento') return 'Promessa de Recebimento';
+    return 'Promessa de Pagamento';
   }
 
   ngOnInit(): void { this.load(); }

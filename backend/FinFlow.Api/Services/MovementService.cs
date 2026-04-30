@@ -79,8 +79,8 @@ public class MovementService(AppDbContext db) : IMovementService
 
     private static void ValidateType(string type)
     {
-        if (type is not ("receita" or "divida"))
-            throw new ArgumentException("Tipo deve ser 'receita' ou 'divida'.");
+        if (type is not ("receita" or "divida" or "promessa_pagamento" or "promessa_recebimento"))
+            throw new ArgumentException("Tipo deve ser 'receita', 'divida', 'promessa_pagamento' ou 'promessa_recebimento'.");
     }
 
     private static MovementDto ToDto(Movement m) =>

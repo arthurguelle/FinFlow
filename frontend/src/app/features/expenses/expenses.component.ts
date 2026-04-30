@@ -68,7 +68,7 @@ import { StorageService } from '../../core/services/storage.service';
             <mat-label>Classificar como</mat-label>
             <mat-select [(ngModel)]="bulkMovementId">
               <mat-option [value]="null">Sem categoria</mat-option>
-              @for (m of movements; track m.id) {
+                  @for (m of nonPromiseMovements; track m.id) {
                 <mat-option [value]="m.id">{{ m.title }}</mat-option>
               }
             </mat-select>
@@ -139,6 +139,8 @@ import { StorageService } from '../../core/services/storage.service';
                   <mat-option value="all">Todos</mat-option>
                   <mat-option value="receita">Receita</mat-option>
                   <mat-option value="divida">Dívida</mat-option>
+                  <mat-option value="promessa_recebimento">Promessa de Recebimento</mat-option>
+                  <mat-option value="promessa_pagamento">Promessa de Pagamento</mat-option>
                 </mat-select>
               </mat-form-field>
               <mat-form-field appearance="outline">
@@ -175,7 +177,7 @@ import { StorageService } from '../../core/services/storage.service';
               <mat-label>Categoria</mat-label>
               <mat-select [(ngModel)]="reviewMovementId">
                 <mat-option [value]="null">Sem categoria</mat-option>
-                @for (m of movements; track m.id) {
+                @for (m of nonPromiseMovements; track m.id) {
                   <mat-option [value]="m.id">{{ m.title }}</mat-option>
                 }
               </mat-select>
@@ -279,6 +281,13 @@ import { StorageService } from '../../core/services/storage.service';
                 <mat-label>Data</mat-label>
                 <input matInput type="date" formControlName="expenseDate">
               </mat-form-field>
+              @if (requiresDueDate) {
+                <mat-form-field appearance="outline">
+                  <mat-label>Data limite</mat-label>
+                  <input matInput type="date" formControlName="dueDate">
+                  <mat-hint>Obrigatória para promessas</mat-hint>
+                </mat-form-field>
+              }
               <mat-form-field appearance="outline">
                 <mat-label>Categoria</mat-label>
                 <mat-select formControlName="movementId">
@@ -343,6 +352,16 @@ import { StorageService } from '../../core/services/storage.service';
                 <ng-container matColumnDef="date">
                   <th mat-header-cell *matHeaderCellDef>Data</th>
                   <td mat-cell *matCellDef="let e">{{ e.expenseDate }}</td>
+                </ng-container>
+                <ng-container matColumnDef="dueDate">
+                  <th mat-header-cell *matHeaderCellDef>Limite</th>
+                  <td mat-cell *matCellDef="let e">
+                    @if (e.dueDate) {
+                      <span [class.overdue-badge]="isOverdueDate(e.dueDate)">{{ e.dueDate }}</span>
+                    } @else {
+                      <span class="no-category">—</span>
+                    }
+                  </td>
                 </ng-container>
                 <ng-container matColumnDef="title">
                   <th mat-header-cell *matHeaderCellDef>Título</th>
@@ -415,9 +434,22 @@ import { StorageService } from '../../core/services/storage.service';
     .empty-state mat-icon { font-size: 3rem; height: 3rem; width: 3rem; margin-bottom: 1rem; }
     .receita { color: #2e7d32; }
     .divida { color: #c62828; }
+    .promessa_recebimento { color: #1565c0; }
+    .promessa_pagamento { color: #ef6c00; }
     .no-category { color: var(--color-text-secondary); }
     mat-chip.receita { background: #e8f5e9 !important; color: #2e7d32 !important; }
     mat-chip.divida { background: #ffebee !important; color: #c62828 !important; }
+    mat-chip.promessa_recebimento { background: #e3f2fd !important; color: #1565c0 !important; }
+    mat-chip.promessa_pagamento { background: #fff3e0 !important; color: #ef6c00 !important; }
+    .overdue-badge {
+      display: inline-block;
+      padding: 0.15rem 0.4rem;
+      border-radius: 6px;
+      background: #ffebee;
+      color: #b71c1c;
+      font-weight: 600;
+      font-size: 0.78rem;
+    }
     /* Selection bar */
     .selection-bar { display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem; background: #e3eaf4; border-radius: 8px; margin-bottom: 1rem; flex-wrap: wrap; }
     .sel-count { font-weight: 500; color: var(--color-primary, #4A6FA5); margin-right: 0.5rem; }
@@ -438,7 +470,7 @@ export class ExpensesComponent implements OnInit {
   expenses: Expense[] = [];
   movements: Movement[] = [];
   extractedItems: ExtractedExpenseItem[] = [];
-  columns = ['select', 'date', 'title', 'movement', 'amount', 'actions'];
+  columns = ['select', 'date', 'dueDate', 'title', 'movement', 'amount', 'actions'];
   loading = false;
   extracting = false;
   saving = false;
@@ -461,6 +493,17 @@ export class ExpensesComponent implements OnInit {
 
   get currentReviewExpense(): Expense | null {
     return this.reviewList[this.reviewIndex] ?? null;
+  }
+
+  get nonPromiseMovements(): Movement[] {
+    return this.movements.filter(m => !this.isPromiseType(m.type));
+  }
+
+  get requiresDueDate(): boolean {
+    const movementId = this.form.get('movementId')?.value as string | null;
+    if (!movementId) return false;
+    const selectedMovement = this.movements.find(m => m.id === movementId);
+    return this.isPromiseType(selectedMovement?.type);
   }
 
   get isDemo(): boolean {
@@ -520,6 +563,7 @@ export class ExpensesComponent implements OnInit {
         title: expense.title,
         amount: expense.amount,
         expenseDate: expense.expenseDate,
+        dueDate: expense.dueDate ?? null,
         movementId: this.reviewMovementId
       } as any).subscribe({
         next: r => {
@@ -581,7 +625,7 @@ export class ExpensesComponent implements OnInit {
   filterDateStart = '';
   filterDateEnd = '';
   filterMovementId: string | null = null;
-  filterType: 'all' | 'receita' | 'divida' = 'all';
+  filterType: 'all' | 'receita' | 'divida' | 'promessa_pagamento' | 'promessa_recebimento' = 'all';
   filterAmountMin: number | null = null;
   filterAmountMax: number | null = null;
   showFilters = false;
@@ -635,7 +679,20 @@ export class ExpensesComponent implements OnInit {
       title: ['', Validators.required],
       amount: [0, [Validators.required, Validators.min(0.01)]],
       expenseDate: ['', Validators.required],
+      dueDate: [null as string | null],
       movementId: [null as string | null]
+    });
+
+    this.form.get('movementId')?.valueChanges.subscribe(() => {
+      const dueDateControl = this.form.get('dueDate');
+      if (!dueDateControl) return;
+      if (this.requiresDueDate) {
+        dueDateControl.addValidators([Validators.required]);
+      } else {
+        dueDateControl.clearValidators();
+        dueDateControl.setValue(null);
+      }
+      dueDateControl.updateValueAndValidity({ emitEvent: false });
     });
   }
 
@@ -654,7 +711,7 @@ export class ExpensesComponent implements OnInit {
 
   openForm(): void {
     this.editing = null;
-    this.form.reset({ amount: 0, movementId: null });
+    this.form.reset({ amount: 0, movementId: null, dueDate: null });
     this.showForm = true;
   }
 
@@ -664,6 +721,7 @@ export class ExpensesComponent implements OnInit {
       title: expense.title,
       amount: expense.amount,
       expenseDate: expense.expenseDate,
+      dueDate: expense.dueDate ?? null,
       movementId: expense.movementId ?? null
     });
     this.showForm = true;
@@ -671,6 +729,12 @@ export class ExpensesComponent implements OnInit {
 
   save(): void {
     if (this.form.invalid) return;
+
+    if (this.requiresDueDate && !this.form.value.dueDate) {
+      this.snack.open('Data limite é obrigatória para promessas.', 'Fechar', { duration: 3500 });
+      return;
+    }
+
     this.saving = true;
     const data = this.form.value;
     const obs = this.editing
@@ -791,6 +855,7 @@ export class ExpensesComponent implements OnInit {
       title: item.title,
       amount: item.amount,
       expenseDate: item.date,
+      dueDate: null,
       movementId: undefined
     } as any).subscribe(r => {
       if (r.success) {
@@ -803,5 +868,16 @@ export class ExpensesComponent implements OnInit {
   saveAllExtracted(): void {
     const items = [...this.extractedItems];
     items.forEach(item => this.saveExtracted(item));
+  }
+
+  isPromiseType(type?: string | null): boolean {
+    return type === 'promessa_pagamento' || type === 'promessa_recebimento';
+  }
+
+  isOverdueDate(dateIso: string): boolean {
+    const today = new Date();
+    const todayOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const dueDate = new Date(`${dateIso}T00:00:00`);
+    return dueDate < todayOnly;
   }
 }
